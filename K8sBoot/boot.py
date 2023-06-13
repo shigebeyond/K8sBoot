@@ -11,7 +11,7 @@ from pyutilb import YamlBoot, BreakException
 from pyutilb.log import log
 import platform
 
-
+# https://gitee.com/czy233/k8s-demo
 # k8s配置生成的基于yaml的启动器
 class Boot(YamlBoot):
 
@@ -74,13 +74,19 @@ class Boot(YamlBoot):
     def volumn(self, options):
         pass
 
-    # 设置密钥
-    def secret(self, options):
-        pass
-
-    # 设置服务: 内部实现pod+deploy+service
-    def service(self, options):
-        pass
+    def secret(self, map):
+        '''
+        密钥
+        :param map: 键值对
+        :return:
+        '''
+        yaml = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": self.build_metadata('-secret'),
+            "type": "Opaque",
+            "data": map
+        }
 
     def build_metadata(self, name_postfix):
         meta = {
@@ -95,6 +101,39 @@ class Boot(YamlBoot):
         return {
             'app': self.appname
         }
+
+    def build_resources(self, option):
+        ret = {
+            "limits": {
+                "memory": "200Mi"
+            },
+            "requests": {
+                "memory": "100Mi"
+            }
+        }
+
+    # 目录映射
+    def build_volume_mounts(self, mounts):
+        ret = []
+        for mount in mounts:
+            if "nfs://" in mount:
+                pass
+            elif ':' in mount:
+                host_path, mount_path = mount.split(':', 1)
+            else:
+                mount_path = mount
+            
+            yaml = {
+                "name": "redis-storage",
+                "mountPath": "/data/redis"
+            }
+            ret.append(yaml)
+            vol = {
+                "name": "redis-storage",
+                "emptyDir": {}
+            }
+            self.volumes.append(vol)
+        return ret
 
     def gen_cfg(self):
         # 配置文件转dict
@@ -183,6 +222,7 @@ class Boot(YamlBoot):
             "ports": [{
                 "containerPort": 80
             }],
+            "volumeMounts": self.build_volume_mounts(option["volumes"]),
             "readinessProbe": {
                 "exec": {
                     "command": ["/usr/bin/check-status", "-r"]
@@ -191,7 +231,7 @@ class Boot(YamlBoot):
         }
 
     # 用在变量赋值中的函数
-    def field_val(self, field):
+    def from_field(self, field):
         return {
             "valueFrom":{
                 "fieldRef": {
@@ -201,11 +241,22 @@ class Boot(YamlBoot):
         }
 
     # 用在变量赋值中的函数
-    def config_val(self, file, key):
+    def from_config(self, file, key):
         return {
             "valueFrom":{
                 "configMapKeyRef":{
                   "name": file, # The ConfigMap this value comes from.
+                  "key": key # The key to fetch.
+                }
+            }
+        }
+
+    # 用在变量赋值中的函数
+    def from_secret(self, file, key):
+        return {
+            "valueFrom":{
+                "secretKeyRef":{
+                  "name": file, # The Secret this value comes from.
                   "key": key # The key to fetch.
                 }
             }
@@ -221,21 +272,47 @@ class Boot(YamlBoot):
             })
         return ret
 
-    def gen_svc(self):
-        ports = [{
-            'port': 8078,
-            'name': 'http',
-            'targetPort': 80,
-            # "nodePort": 30001, # 仅对 type=NodePort
-            'protocol': 'TCP'
-        }]
+    # 宿主机端口:服务端口:容器端口
+    def gen_svc(self, ports):
+        if isinstance(ports, str):
+            ports = [ports]
+
+        port_maps = []
+        type = 'ClusterIP'
+        for port in ports:
+            parts = port.split(':')
+            n = len(parts)
+            if n == 3:
+                type = 'NodePort'
+                port_map = {
+                    "name": "p" + parts[2],
+                    "nodePort": parts[0], # 宿主机端口
+                    "port": parts[1], # 服务端口
+                    "targetPort": parts[2], # 容器端口
+                    "protocol": "TCP"
+                }
+            elif n == 2:
+                port_map = {
+                    "name": "p" + parts[1],
+                    "port": parts[0], # 服务端口
+                    "targetPort": parts[1], # 容器端口
+                    "protocol": "TCP"
+                }
+            else:
+                port_map = {
+                    "name": "p" + port,
+                    "port": port, # 服务端口
+                    "targetPort": port, # 容器端口
+                    "protocol": "TCP"
+                }
+            port_maps.append(port_map)
         yaml = {
             "apiVersion": "vl",
             "kind": "Service",
             "metadata": self.build_metadata("-svc"),
             "spec": {
-                # "type": "NodePort",
-                "ports": ports,
+                "type": type,
+                "ports": port_maps,
                 "selector": self.build_labels()
             }
         }
@@ -263,5 +340,5 @@ def main():
 
 if __name__ == '__main__':
     # main()
-    data = read_yaml('/home/shi/code/k8s/test.yaml')
+    data = read_yaml('/home/shi/code/k8s/k8s-demo-master/test-k8s/yaml/configmap/secret.yaml')
     print(json.dumps(data))
