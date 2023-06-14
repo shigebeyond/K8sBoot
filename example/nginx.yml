@@ -1,0 +1,19 @@
+- app(nginx):
+    - config:
+        auther: shigebeyond
+        nginx.conf: ${read_file(./nginx.conf)}
+    - env:
+        TZ: Asia/Shanghai
+    - containers:
+        nginx:
+          image: nginx
+          ports:
+            - 8078:80
+          volumes:
+            - /lnmp/www:/www
+            # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
+            - config:nginx.conf:/etc/nginx/nginx.conf
+    - deploy:
+        replicas: 1
+        node:
+          beta.kubernetes.io/os: linux
