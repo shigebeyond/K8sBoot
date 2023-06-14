@@ -18,6 +18,8 @@ class Boot(YamlBoot):
 
     def __init__(self):
         super().__init__()
+        # step_dir作为当前目录
+        self.step_dir_as_cwd = True
         # 动作映射函数
         actions = {
             'ns': self.ns,
@@ -25,6 +27,9 @@ class Boot(YamlBoot):
             'config': self.config,
             'secret': self.secret,
             'rc': self.rc,
+            'rs': self.rs,
+            'ds': self.ds,
+            'stateset': self.stateset,
             'deploy': self.deploy,
             'service': self.service,
             'containers': self.containers,
@@ -40,7 +45,6 @@ class Boot(YamlBoot):
 
         self._ns = '' # 命名空间
         self._app = '' # 应用名
-        self._env = {} # 环境变量
         self._containers = [] # 记录处理过的容器
         self._volumes = [] # 记录容器中的卷
         self._ports = [] # 记录容器中的端口映射
@@ -49,7 +53,6 @@ class Boot(YamlBoot):
     # 清空app相关的属性
     def clear_app(self):
         self._app = ''  # 应用名
-        self._env = {}  # 环境变量
         self._containers = []  # 记录处理过的容器
         self._volumes = []  # 记录容器中的卷
         self._ports = []  # 记录容器中的端口映射
@@ -57,9 +60,14 @@ class Boot(YamlBoot):
 
     # 保存yaml
     def save_yaml(self, data, file_postfix):
-        file = os.path.join('out', self._app + file_postfix)
+        # 创建目录
+        if not os.path.exists(self._app):
+            os.makedirs(self._app)
+        # 保存文件
+        file = os.path.join(self._app, self._app + file_postfix)
         write_file(file, yaml.dump(data))
 
+    # 获得并删除字典中的项目
     def get_and_del_dict_item(self, dict, key, default = None):
         if key in dict:
             ret = dict[key]
@@ -67,10 +75,17 @@ class Boot(YamlBoot):
             return ret
         return default
 
+    # 获得列表中的项目
     def get_list_item(self, list, i, default = None):
         if len(list) >= i:
             return default
         return list[i]
+
+    # 删除字典中值为none的项目
+    def del_dict_none_item(self, dict):
+        keys = [k for k,v in dict.items() if v is None]
+        for k in keys:
+            del dict[k]
 
     # --------- 动作处理的函数 --------
     # 修正节点标签
@@ -185,14 +200,7 @@ class Boot(YamlBoot):
                 "selector": {
                     "matchLabels": self.build_labels()
                 },
-                "template": {
-                    "metadata": {
-                        "labels": self.build_labels()
-                    },
-                    "spec": {
-                        "containers": self._containers
-                    }
-                }
+                "template": self.build_pod_template()
             }
         }
 
@@ -213,14 +221,7 @@ class Boot(YamlBoot):
                 "selector": {
                     "matchLabels": self.build_labels()
                 },
-                "template": {
-                    "metadata": {
-                        "labels": self.build_labels()
-                    },
-                    "spec": {
-                        "containers": self._containers
-                    }
-                }
+                "template": self.build_pod_template()
             }
         }
 
@@ -240,15 +241,7 @@ class Boot(YamlBoot):
                 "selector": {
                     "matchLabels": self.build_labels()
                 },
-                "template": {
-                    "metadata": {
-                        "labels": self.build_labels()
-                    },
-                    "spec": {
-                        "nodeSelector": option.get('node'),
-                        "containers": self._containers,
-                    }
-                }
+                "template": self.build_pod_template(option.get('node'))
             }
         }
 
@@ -267,18 +260,11 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata("-stateset"),
             "spec": {
                 "replicas": option.get("replicas", 1),
-                "serviceName": "mongodb",
+                "serviceName": self._app + "-svc",
                 "selector": {
                     "matchLabels": self.build_labels()
                 },
-                "template": {
-                    "metadata": {
-                        "labels": self.build_labels()
-                    },
-                    "spec": {
-                        "containers": self._containers,
-                    }
-                }
+                "template": self.build_pod_template()
             }
         }
 
@@ -302,20 +288,33 @@ class Boot(YamlBoot):
                 "selector": {
                     "matchLabels": self.build_labels()
                 },
-                "template": {
-                    "metadata": {
-                        "labels": self.build_labels()
-                    },
-                    "spec": {
-                        "nodeSelector": option.get('node'),
-                        "containers": self._containers,
-                        "restartPolicy": "Always",
-                        "volumes": self.build_volume()
-                    }
-                }
+                "template": self.build_pod_template(option.get('node'))
             }
         }
         self.save_yaml(yaml, '-deploy.yml')
+
+    def build_pod_template(self, node = None):
+        '''
+        构建pod模板
+        :param node: 只有deploy才有node过滤器
+        :return:
+        '''
+        ret = {
+            "metadata": {
+                "labels": self.build_labels()
+            },
+            "spec": {
+                "containers": self._containers,
+                "restartPolicy": "Always",
+                "volumes": self._volumes
+            }
+        }
+        # 只有deploy才有node过滤器
+        if node:
+            if isinstance(node, str):
+                node = replace_var(node, False)
+            ret["spec"]["nodeSelector"] = node
+        return ret
 
     def service(self):
         '''
@@ -374,19 +373,19 @@ class Boot(YamlBoot):
         self.save_yaml(yaml, '-svc.yml')
 
     def containers(self, containers):
-        return [self.build_container(name, option) for name, option in containers.items()]
+        self._containers = [self.build_container(name, option) for name, option in containers.items()]
 
     # 构建容器
     def build_container(self, name, option):
         ret = {
             "name": name,
-            "image": self.get_and_del_dict_item('image'),
-            "imagePullPolicy": self.get_and_del_dict_item('imagePullPolicy', "IfNotPresent"),
-            "env": self.build_env(),
-            "command": self.get_and_del_dict_item('command'),
-            "ports": self.build_container_ports(self.get_and_del_dict_item('ports')),
-            "resources": self.build_resources(self.get_and_del_dict_item("resources")),
-            "volumeMounts": self.build_volume_mounts(self.get_and_del_dict_item("volumes")),
+            "image": self.get_and_del_dict_item(option, 'image'),
+            "imagePullPolicy": self.get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
+            "env": self.build_env(self.get_and_del_dict_item(option, 'env')),
+            "command": self.get_and_del_dict_item(option, 'command'),
+            "ports": self.build_container_ports(self.get_and_del_dict_item(option, 'ports')),
+            "resources": self.build_resources(self.get_and_del_dict_item(option, "resources")),
+            "volumeMounts": self.build_volume_mounts(self.get_and_del_dict_item(option, "volumes")),
             "readinessProbe": {
                 "exec": {
                     "command": ["/usr/bin/check-status", "-r"]
@@ -394,6 +393,7 @@ class Boot(YamlBoot):
             }
         }
         ret.update(option)
+        self.del_dict_none_item(ret)
         return ret
 
     def build_metadata(self, name_postfix):
@@ -535,11 +535,18 @@ class Boot(YamlBoot):
             config://mycfg:/etc/mycfg
             '''
             if "://" in mount:
-                mat = re.search('(\w+)://([\w\d\._]*)(/.+):(.+)', mount)
+                #  mat = re.search('(\w+)://([\w\d\._]*)(/.+):(.+)', mount)
+                mat = re.search('(\w+)://(.+?):(.+)', mount)
                 protocol = mat.group(1) # 协议
-                host = mat.group(2) # 主机
-                host_path = mat.group(3) # 宿主机路径
-                mount_path = mat.group(4) # 容器中挂载路径
+                host_and_path = mat.group(2) # 主机 + 宿主机路径
+                mount_path = mat.group(3) # 容器中挂载路径
+                mat = re.search('([\w\d\._:]+)(/.+)', host_and_path)
+                if mat:
+                    host = mat.group(1) # 主机
+                    host_path = mat.group(2) # 宿主机路径
+                else:
+                    host = ''
+                    host_path = host_and_path
                 vol = self.build_volume(protocol, host, host_path)
             elif ':' in mount: # /mycfg:/etc/mycfg
                 host_path, mount_path = mount.split(':', 1)
@@ -555,6 +562,7 @@ class Boot(YamlBoot):
                 }
 
             # 记录挂载
+            # name = 'vol-' + random_str(10)
             name = 'vol-' + md5(mount_path)
             yaml = {
                 "name": name,
@@ -601,10 +609,18 @@ class Boot(YamlBoot):
             }
         }
 
-    def build_env(self):
+    def build_env(self, env):
+        if env is None or len(env) == 0:
+            return None
+        # 整体是变量字符串
+        is_whole_var = isinstance(env, str)
+        if is_whole_var:
+            env = replace_var(env, False)
+
         ret = []
-        for key, val in self._env:
-            val = replace_var(val)
+        for key, val in env.items():
+            if not is_whole_var:
+                val = replace_var(val)
             ret.append({
                 "name": key,
                 "value": val

@@ -2,17 +2,25 @@
     - config:
         auther: shigebeyond
         nginx.conf: ${read_file(./nginx.conf)}
-    - env:
-        TZ: Asia/Shanghai
     - containers:
         nginx:
           image: nginx
+          env:
+            TZ: Asia/Shanghai
           ports:
             - 8078:80
           volumes:
             - /lnmp/www:/www
             # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
-            - config:nginx.conf:/etc/nginx/nginx.conf
+            - config://nginx.conf:/etc/nginx/nginx.conf
+    - rc:
+        replicas: 1
+    - rs:
+        replicas: 1
+    - ds:
+        replicas: 1
+    - stateset:
+        replicas: 1
     - deploy:
         replicas: 1
         node:
