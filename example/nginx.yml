@@ -35,3 +35,6 @@
         replicas: 1 # 副本数
         node: # 节点过滤
           beta.kubernetes.io/os: linux
+        tolerations: # 容忍
+#          - node-role.kubernetes.io/master:NoSchedule
+          - node-role.kubernetes.io/control-plane:NoSchedule

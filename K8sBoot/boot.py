@@ -238,7 +238,7 @@ class Boot(YamlBoot):
                 "selector": {
                     "matchLabels": self.build_labels()
                 },
-                "template": self.build_pod_template(option.get('node'))
+                "template": self.build_pod_template(option.get('node'), option.get('tolerations'))
             }
         }
 
@@ -287,15 +287,48 @@ class Boot(YamlBoot):
                 "selector": {
                     "matchLabels": self.build_labels()
                 },
-                "template": self.build_pod_template(option.get('node'))
+                "template": self.build_pod_template(option.get('node'), option.get('tolerations'))
             }
         }
         self.save_yaml(yaml, '-deploy.yml')
 
-    def build_pod_template(self, node = None):
+    def build_tolerations(self, tolerations):
+        '''
+        构建容忍
+        :params tolerations 多行，格式为
+                    :NoExecute
+                     CriticalAddonsOnly
+                     node.kubernetes.io/disk-pressure:NoSchedule
+                     node-role.kubernetes.io/master=???:NoSchedule
+        '''
+        if tolerations is None or len(tolerations) == 0:
+            return None
+        if isinstance(tolerations, str):
+            tolerations = [tolerations]
+
+        ret = []
+        for toleration in tolerations:
+            item = {}
+            # 解析 effect
+            if ':' in toleration:
+                toleration, effect = toleration.split(':')
+                item['effect'] = effect
+            if toleration:
+                if '=' in toleration:
+                    item['key'], item['vale'] = toleration.split('=')
+                    item['operator'] = 'Equal'
+                else:
+                    item['key'] = toleration
+                    item['operator'] = 'Exists'
+
+            ret.append(item)
+        return ret
+
+    def build_pod_template(self, node = None, tolerations = None):
         '''
         构建pod模板
         :param node: 只有deploy才有node过滤器
+        :param tolerations: 只有deploy才有容忍
         :return:
         '''
         ret = {
@@ -313,6 +346,9 @@ class Boot(YamlBoot):
             if isinstance(node, str):
                 node = replace_var(node, False)
             ret["spec"]["nodeSelector"] = node
+        # 只有deploy才有容忍
+        if tolerations:
+            ret["spec"]["tolerations"] = self.build_tolerations(tolerations)
         return ret
 
     def service(self):
