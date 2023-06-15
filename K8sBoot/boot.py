@@ -12,8 +12,12 @@ from pyutilb import YamlBoot, BreakException
 from pyutilb.log import log
 import platform
 
-# https://gitee.com/czy233/k8s-demo
-# k8s配置生成的基于yaml的启动器
+'''
+k8s配置生成的基于yaml的启动器
+参考：
+k8s配置文件demo: https://gitee.com/czy233/k8s-demo
+k8s资源简写: https://zhuanlan.zhihu.com/p/369647740
+'''
 class Boot(YamlBoot):
 
     def __init__(self):
@@ -29,7 +33,7 @@ class Boot(YamlBoot):
             'rc': self.rc,
             'rs': self.rs,
             'ds': self.ds,
-            'stateset': self.stateset,
+            'sts': self.sts,
             'deploy': self.deploy,
             'service': self.service,
             'containers': self.containers,
@@ -48,7 +52,7 @@ class Boot(YamlBoot):
         self._containers = [] # 记录处理过的容器
         self._volumes = [] # 记录容器中的卷
         self._ports = [] # 记录容器中的端口映射
-        self._is_stateset = False # 是否用 statefulset 来部署
+        self._is_sts = False # 是否用 statefulset 来部署
 
     # 清空app相关的属性
     def clear_app(self):
@@ -56,7 +60,7 @@ class Boot(YamlBoot):
         self._containers = []  # 记录处理过的容器
         self._volumes = []  # 记录容器中的卷
         self._ports = []  # 记录容器中的端口映射
-        self._is_stateset = False  # 是否用 statefulset 来部署
+        self._is_sts = False  # 是否用 statefulset 来部署
 
     # 保存yaml
     def save_yaml(self, data, file_postfix):
@@ -66,26 +70,6 @@ class Boot(YamlBoot):
         # 保存文件
         file = os.path.join(self._app, self._app + file_postfix)
         write_file(file, yaml.dump(data))
-
-    # 获得并删除字典中的项目
-    def get_and_del_dict_item(self, dict, key, default = None):
-        if key in dict:
-            ret = dict[key]
-            del dict[key]
-            return ret
-        return default
-
-    # 获得列表中的项目
-    def get_list_item(self, list, i, default = None):
-        if len(list) >= i:
-            return default
-        return list[i]
-
-    # 删除字典中值为none的项目
-    def del_dict_none_item(self, dict):
-        keys = [k for k,v in dict.items() if v is None]
-        for k in keys:
-            del dict[k]
 
     # --------- 动作处理的函数 --------
     # 修正节点标签
@@ -185,12 +169,23 @@ class Boot(YamlBoot):
         }
         self.save_yaml(yaml, '-secret.yml')
 
+    # 修正有副本的选项
+    def fix_replicas_option(self, option, action):
+        if isinstance(option, (int, str)):
+            return {
+                "replicas": option
+            }
+        if isinstance(option, dict):
+            return option
+        raise Exception(f"动作{action}的参数非字典类型")
+
     def rc(self, option):
         '''
         生成rc
         :param option 部署选项 {replicas}
                         replicas 副本数
         '''
+        option = self.fix_replicas_option(option, 'rc')
         yaml = {
             "apiVersion": "v1",
             "kind": "ReplicationController",
@@ -212,6 +207,7 @@ class Boot(YamlBoot):
         :param option 部署选项 {replicas}
                         replicas 副本数
         '''
+        option = self.fix_replicas_option(option, 'rs')
         yaml = {
             "apiVersion": "v1",
             "kind": "ReplicaSet",
@@ -233,6 +229,7 @@ class Boot(YamlBoot):
         :params option 部署选项 {node}
                         node 节点过滤，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
+        option = self.fix_replicas_option(option, 'ds')
         yaml = {
             "apiVersion": "v1",
             "kind": "DaemonSet",
@@ -247,17 +244,18 @@ class Boot(YamlBoot):
 
         self.save_yaml(yaml, '-rs.yml')
 
-    def stateset(self, option):
+    def sts(self, option):
         '''
         生成 StatefulSet
         :params option 部署选项 {replicas, node}
                         replicas 副本数
                         node 节点过滤，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
+        option = self.fix_replicas_option(option, 'sts')
         yaml = {
             "apiVersion": "v1",
             "kind": "StatefulSet",
-            "metadata": self.build_metadata("-stateset"),
+            "metadata": self.build_metadata("-sts"),
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "serviceName": self._app + "-svc",
@@ -268,9 +266,9 @@ class Boot(YamlBoot):
             }
         }
 
-        self.save_yaml(yaml, '-stateset.yml')
+        self.save_yaml(yaml, '-sts.yml')
 
-        self._is_stateset = True
+        self._is_sts = True
 
     def deploy(self, option):
         '''
@@ -279,6 +277,7 @@ class Boot(YamlBoot):
                         replicas 副本数
                         node 节点过滤，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
+        option = self.fix_replicas_option(option, 'deploy')
         yaml = {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
@@ -326,34 +325,41 @@ class Boot(YamlBoot):
         port_maps = []
         type = 'ClusterIP'
         for port in self._ports:
-            parts = port.split(':')
+            # 解析协议
+            protocol = "TCP"
+            if "://" in port:
+                protocol, port = port.split("://", 1)
+                protocol = protocol.upper()
+
+            # 解析1~3个端口
+            parts = list(map(int, port.split(':'))) # 分割+转int
             n = len(parts)
             if n == 3:
                 type = 'NodePort'
                 port_map = {
-                    "name": "p" + parts[2],
+                    "name": "p" + str(parts[2]),
                     "nodePort": parts[0],  # 宿主机端口
                     "port": parts[1],  # 服务端口
                     "targetPort": parts[2],  # 容器端口
-                    "protocol": "TCP"
+                    "protocol": protocol
                 }
             elif n == 2:
                 port_map = {
-                    "name": "p" + parts[1],
+                    "name": "p" + str(parts[1]),
                     "port": parts[0],  # 服务端口
                     "targetPort": parts[1],  # 容器端口
-                    "protocol": "TCP"
+                    "protocol": protocol
                 }
             else:
                 port_map = {
                     "name": "p" + port,
                     "port": port,  # 服务端口
                     "targetPort": port,  # 容器端口
-                    "protocol": "TCP"
+                    "protocol": protocol
                 }
             port_maps.append(port_map)
         yaml = {
-            "apiVersion": "vl",
+            "apiVersion": "v1",
             "kind": "Service",
             "metadata": self.build_metadata("-svc"),
             "spec": {
@@ -366,7 +372,7 @@ class Boot(YamlBoot):
             }
         }
         # statefulset 要使用 headless service
-        if self._is_stateset:
+        if self._is_sts:
             yaml["spec"]["type"] = 'ClusterIP'
             yaml["spec"]["clusterIP"] = None # HeadLess service
 
@@ -379,13 +385,13 @@ class Boot(YamlBoot):
     def build_container(self, name, option):
         ret = {
             "name": name,
-            "image": self.get_and_del_dict_item(option, 'image'),
-            "imagePullPolicy": self.get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
-            "env": self.build_env(self.get_and_del_dict_item(option, 'env')),
-            "command": self.get_and_del_dict_item(option, 'command'),
-            "ports": self.build_container_ports(self.get_and_del_dict_item(option, 'ports')),
-            "resources": self.build_resources(self.get_and_del_dict_item(option, "resources")),
-            "volumeMounts": self.build_volume_mounts(self.get_and_del_dict_item(option, "volumes")),
+            "image": get_and_del_dict_item(option, 'image'),
+            "imagePullPolicy": get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
+            "env": self.build_env(get_and_del_dict_item(option, 'env')),
+            "command": get_and_del_dict_item(option, 'command'),
+            "ports": self.build_container_ports(get_and_del_dict_item(option, 'ports')),
+            "resources": self.build_resources(get_and_del_dict_item(option, "resources")),
+            "volumeMounts": self.build_volume_mounts(get_and_del_dict_item(option, "volumes")),
             "readinessProbe": {
                 "exec": {
                     "command": ["/usr/bin/check-status", "-r"]
@@ -393,7 +399,7 @@ class Boot(YamlBoot):
             }
         }
         ret.update(option)
-        self.del_dict_none_item(ret)
+        del_dict_none_item(ret)
         return ret
 
     def build_metadata(self, name_postfix):
@@ -427,7 +433,7 @@ class Boot(YamlBoot):
         for port in ports:
             port = port.rsplit(':', 1)[-1]
             container_ports.append({
-                "containerPort": port
+                "containerPort": int(port)
             })
         return container_ports
 
@@ -451,7 +457,7 @@ class Boot(YamlBoot):
         }
         # 最大值
         if len(cpus) > 1 or len(mems) > 1:
-            ret["limits"] = self.build_resource_item(self.get_list_item(cpus, 1), self.get_list_item(mems, 1))
+            ret["limits"] = self.build_resource_item(get_list_item(cpus, 1), get_list_item(mems, 1))
         return ret
 
     def build_resource_item(self, cpu, mem):
@@ -494,7 +500,10 @@ class Boot(YamlBoot):
         if protocol == 'config':
             return {
                 'configMap': {
-                    'name': host_path,
+                    'name': self._app + "-cfg",
+                    # 'items': [
+                    #     {'key': host_path, 'path': host_path}
+                    # ]
                 }
             }
         # secret: https://www.cnblogs.com/litzhiai/p/11950273.html
@@ -534,6 +543,7 @@ class Boot(YamlBoot):
             nfs://192.168.159.14/data:/mnt
             config://mycfg:/etc/mycfg
             '''
+            protocol = None
             if "://" in mount:
                 #  mat = re.search('(\w+)://([\w\d\._]*)(/.+):(.+)', mount)
                 mat = re.search('(\w+)://(.+?):(.+)', mount)
@@ -568,6 +578,8 @@ class Boot(YamlBoot):
                 "name": name,
                 "mountPath": mount_path
             }
+            if protocol == 'config':
+                yaml['subPath'] = host_path
             if ro:
                 yaml['readOnly'] = True
             ret.append(yaml)

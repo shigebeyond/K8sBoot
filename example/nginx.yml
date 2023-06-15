@@ -8,20 +8,30 @@
           env:
             TZ: Asia/Shanghai
           ports:
-            - 8078:80
+            #- 30000:80 # 服务端口:容器端口
+            - 30000:30000:80 # 宿主机端口:服务端口:容器端口
+            #- udp://30000:80 # 前面加协议
           volumes:
             - /lnmp/www:/www
             # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
             - config://nginx.conf:/etc/nginx/nginx.conf
-    - rc:
-        replicas: 1
-    - rs:
-        replicas: 1
-    - ds:
-        replicas: 1
-    - stateset:
-        replicas: 1
+     # 简写
+#    - rc: 1
+#    - rs: 1
+#    - ds: 1
+#    - sts: 1
+#    - deploy: 1
+
+    # 完整写法
+#    - rc:
+#        replicas: 1
+#    - rs:
+#        replicas: 1
+#    - ds:
+#        replicas: 1
+#    - sts:
+#        replicas: 1
     - deploy:
-        replicas: 1
-        node:
+        replicas: 1 # 副本数
+        node: # 节点过滤
           beta.kubernetes.io/os: linux
