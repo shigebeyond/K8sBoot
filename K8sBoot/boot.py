@@ -510,7 +510,7 @@ class Boot(YamlBoot):
             "image": get_and_del_dict_item(option, 'image'),
             "imagePullPolicy": get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
             "env": self.build_env(get_and_del_dict_item(option, 'env')),
-            "command": get_and_del_dict_item(option, 'command'),
+            "command": self.build_command(get_and_del_dict_item(option, 'command')),
             "ports": self.build_container_ports(get_and_del_dict_item(option, 'ports')),
             "resources": self.build_resources(get_and_del_dict_item(option, "resources")),
             "volumeMounts": self.build_volume_mounts(get_and_del_dict_item(option, "volumes")),
@@ -534,6 +534,11 @@ class Boot(YamlBoot):
         return {
             'app': self._app
         }
+
+    def build_command(self, cmd):
+        if isinstance(cmd, str):
+            return re.split('\s+', cmd) # 空格分割
+        return cmd
 
     def build_container_ports(self, ports):
         '''
@@ -798,9 +803,11 @@ class Boot(YamlBoot):
         '''
         # 1 无协议: 执行命令
         if "://" not in action:
+            if isinstance(action, str):
+                action = re.split('\s+', action)  # 空格分割
             return {
                 "exec": {
-                    "command": re.split('\s+', action) # 空格分割
+                    "command": action
                 }
             }
 
