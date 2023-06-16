@@ -1,20 +1,38 @@
 - app(nginx):
     - config:
         auther: shigebeyond
-        nginx.conf: ${read_file(./nginx.conf)}
+        #nginx.conf: ${read_file(./nginx.conf)}
+    - config_files: ./nginx.conf # 文件
+#    - config_files: ./conf/ # 目录
+#    - config_files: # dict，key是配置名，value是文件路径
+#        nginx.conf: ./nginx.conf
+#    - secret_files: ./nginx.conf # 与 config_files 调用一样
     - containers:
         nginx:
           image: nginx
           env:
             TZ: Asia/Shanghai
-          ports:
-            #- 30000:80 # 服务端口:容器端口
-            - 30000:30000:80 # 宿主机端口:服务端口:容器端口
+          ports: # 端口映射
+            - 30000:80 # 服务端口:容器端口
+            #- 30000:30000:80 # 宿主机端口:服务端口:容器端口
             #- udp://30000:80 # 前面加协议
-          volumes:
+          volumes: # 卷映射
             - /lnmp/www:/www
             # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
-            - config://nginx.conf:/etc/nginx/nginx.conf
+            - config://:/usr/share/nginx/test # 挂载configmap所有key到目录
+            - config://nginx.conf:/etc/nginx/nginx.conf # 挂载configmap单个key到文件
+          ready?: # 就绪态
+            # 各种秒数
+            #seconds: initialDelaySeconds=5 periodSeconds=5 timeoutSeconds=5 successThreshold=1 failureThreshold=5 # 全写
+            seconds: i=5 p=5 t=5 s=1 f=5 # 简写
+            # 动作
+            action: ls /etc/nginx/
+#          live?: # 存活性探针
+#            # 各种秒数
+#            #seconds: initialDelaySeconds=5 periodSeconds=5 timeoutSeconds=5 successThreshold=1 failureThreshold=5 # 全写
+#            seconds: i=5 p=5 t=5 s=1 f=5 # 简写
+#            # 动作
+#            action: http://localhost:30000
      # 简写
 #    - rc: 1
 #    - rs: 1
@@ -33,7 +51,7 @@
 #        replicas: 1
     - deploy:
         replicas: 1 # 副本数
-        node: # 节点过滤
+        nodes: # 节点选择
           beta.kubernetes.io/os: linux
         tolerations: # 容忍
 #          - node-role.kubernetes.io/master:NoSchedule
