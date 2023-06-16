@@ -107,7 +107,7 @@ class Boot(YamlBoot):
         node2labels = {}
         for i, row in df.iterrows():
             # 将 kubernetes.io/role=worker 变为 /role=worker
-            labels = re.sub(r'[^,]+\/', '', df['LABELS']).split(',')
+            labels = re.sub(r'[^,]+\/', '', row['LABELS']).split(',')
             labeldict = {}
             for label in labels:
                 key, val = label.split('=')
@@ -212,7 +212,7 @@ class Boot(YamlBoot):
             yaml = {
                 "apiVersion": "v1",
                 "kind": "ConfigMap",
-                "metadata": self.build_metadata("-cfg"),
+                "metadata": self.build_metadata(),
                 "data": self._config_data
             }
             self.save_yaml(yaml, '-config.yml')
@@ -249,7 +249,7 @@ class Boot(YamlBoot):
             yaml = {
                 "apiVersion": "v1",
                 "kind": "Secret",
-                "metadata": self.build_metadata('-secret'),
+                "metadata": self.build_metadata(),
                 "type": "Opaque",
                 "data": self._secret_data
             }
@@ -275,7 +275,7 @@ class Boot(YamlBoot):
         yaml = {
             "apiVersion": "v1",
             "kind": "ReplicationController",
-            "metadata": self.build_metadata("-rc"),
+            "metadata": self.build_metadata(),
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "selector": {
@@ -297,7 +297,7 @@ class Boot(YamlBoot):
         yaml = {
             "apiVersion": "v1",
             "kind": "ReplicaSet",
-            "metadata": self.build_metadata("-rs"),
+            "metadata": self.build_metadata(),
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "selector": {
@@ -319,7 +319,7 @@ class Boot(YamlBoot):
         yaml = {
             "apiVersion": "v1",
             "kind": "DaemonSet",
-            "metadata": self.build_metadata("-ds"),
+            "metadata": self.build_metadata(),
             "spec": {
                 "selector": {
                     "matchLabels": self.build_labels()
@@ -341,10 +341,10 @@ class Boot(YamlBoot):
         yaml = {
             "apiVersion": "v1",
             "kind": "StatefulSet",
-            "metadata": self.build_metadata("-sts"),
+            "metadata": self.build_metadata(),
             "spec": {
                 "replicas": option.get("replicas", 1),
-                "serviceName": self._app + "-svc",
+                "serviceName": self._app,
                 "selector": {
                     "matchLabels": self.build_labels()
                 },
@@ -367,7 +367,7 @@ class Boot(YamlBoot):
         yaml = {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
-            "metadata": self.build_metadata("-deploy"),
+            "metadata": self.build_metadata(),
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "selector": {
@@ -483,7 +483,7 @@ class Boot(YamlBoot):
         yaml = {
             "apiVersion": "v1",
             "kind": "Service",
-            "metadata": self.build_metadata("-svc"),
+            "metadata": self.build_metadata(),
             "spec": {
                 "type": type,
                 "ports": port_maps,
@@ -521,9 +521,9 @@ class Boot(YamlBoot):
         del_dict_none_item(ret)
         return ret
 
-    def build_metadata(self, name_postfix):
+    def build_metadata(self):
         meta = {
-            "name": self._app + name_postfix,
+            "name": self._app,
             "labels": self.build_labels()
         }
         if self._ns:
@@ -619,7 +619,7 @@ class Boot(YamlBoot):
         if protocol == 'config':
             ret = {
                 'configMap': {
-                    'name': self._app + "-cfg",
+                    'name': self._app,
                 }
             }
             # 指定items(配置挂载的key)
@@ -860,7 +860,7 @@ class Boot(YamlBoot):
         return {
             "valueFrom":{
                 "configMapKeyRef":{
-                  "name": self._app + "-cfg", # The ConfigMap this value comes from.
+                  "name": self._app, # The ConfigMap this value comes from.
                   "key": key # The key to fetch.
                 }
             }
@@ -871,7 +871,7 @@ class Boot(YamlBoot):
         return {
             "valueFrom":{
                 "secretKeyRef":{
-                  "name": self._app + "-secret", # The Secret this value comes from.
+                  "name": self._app, # The Secret this value comes from.
                   "key": key # The key to fetch.
                 }
             }
