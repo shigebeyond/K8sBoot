@@ -32,6 +32,7 @@ class Boot(YamlBoot):
             'config_files': self.config_files,
             'secret': self.secret,
             'secret_files': self.secret_files,
+            'pod': self.pod,
             'rc': self.rc,
             'rs': self.rs,
             'ds': self.ds,
@@ -264,6 +265,18 @@ class Boot(YamlBoot):
         if isinstance(option, dict):
             return option
         raise Exception(f"动作{action}的参数非字典类型")
+
+    def pod(self, _):
+        '''
+        生成pod
+        '''
+        yaml = self.build_pod_template()
+        yaml.update({
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": self.build_metadata(),
+        })
+        self.save_yaml(yaml, '-pod.yml')
 
     def rc(self, option):
         '''

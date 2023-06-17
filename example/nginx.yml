@@ -56,6 +56,7 @@
 #        replicas: 1
 #    - sts:
 #        replicas: 1
+#    - pod:
     - deploy:
         replicas: 1 # 副本数
         nodes: # 节点选择
