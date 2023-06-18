@@ -5,6 +5,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 from urllib import parse
 from pyutilb.util import *
 from pyutilb.file import *
@@ -28,6 +29,7 @@ class Boot(YamlBoot):
         actions = {
             'ns': self.ns,
             'app': self.app,
+            'labels': self.labels,
             'config': self.config,
             'config_files': self.config_files,
             'secret': self.secret,
@@ -51,6 +53,7 @@ class Boot(YamlBoot):
 
         self._ns = '' # 命名空间
         self._app = '' # 应用名
+        self._labels = {}  # 记录标签
         self._config_data = {} # 记录设置过的配置
         self._config_file_keys = [] # 记录文件类型的key
         self._secret_data = {} # 记录设置过的密文
@@ -63,6 +66,7 @@ class Boot(YamlBoot):
     # 清空app相关的属性
     def clear_app(self):
         self._app = ''  # 应用名
+        self._labels = {}  # 记录标签
         self._config_data = {}  # 记录设置过的配置
         self._config_file_keys = [] # 记录文件类型的key
         self._secret_data = {}  # 记录设置过的密文
@@ -135,6 +139,9 @@ class Boot(YamlBoot):
         name 应用名
         '''
         self._app = name
+        self._labels = {
+            'app': self._app
+        }
         # 执行子步骤
         self.run_steps(steps)
         # 生成configmap
@@ -145,6 +152,14 @@ class Boot(YamlBoot):
         self.service()
         # 清空app相关的属性
         self.clear_app()
+
+    def labels(self, lbs):
+        '''
+        设置应用标签
+        :param lbs:
+        :return:
+        '''
+        self._labels.update(lbs)
 
     def config(self, data):
         '''
@@ -291,9 +306,7 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": {
                 "replicas": option.get("replicas", 1),
-                "selector": {
-                    "matchLabels": self.build_labels()
-                },
+                "selector": self.build_selector(option.get("selector")),
                 "template": self.build_pod_template()
             }
         }
@@ -313,9 +326,7 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": {
                 "replicas": option.get("replicas", 1),
-                "selector": {
-                    "matchLabels": self.build_labels()
-                },
+                "selector": self.build_selector(option.get("selector")),
                 "template": self.build_pod_template()
             }
         }
@@ -334,9 +345,7 @@ class Boot(YamlBoot):
             "kind": "DaemonSet",
             "metadata": self.build_metadata(),
             "spec": {
-                "selector": {
-                    "matchLabels": self.build_labels()
-                },
+                "selector": self.build_selector(option.get("selector")),
                 "template": self.build_pod_template(option.get('nodes'), option.get('tolerations'))
             }
         }
@@ -358,9 +367,7 @@ class Boot(YamlBoot):
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "serviceName": self._app,
-                "selector": {
-                    "matchLabels": self.build_labels()
-                },
+                "selector": self.build_selector(option.get("selector")),
                 "template": self.build_pod_template()
             }
         }
@@ -383,9 +390,7 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": {
                 "replicas": option.get("replicas", 1),
-                "selector": {
-                    "matchLabels": self.build_labels()
-                },
+                "selector": self.build_selector(option.get("selector")),
                 "template": self.build_pod_template(option.get('nodes'), option.get('tolerations'))
             }
         }
@@ -543,10 +548,44 @@ class Boot(YamlBoot):
             meta['namespace'] = self._ns
         return meta
 
-    def build_labels(self):
-        return {
-            'app': self._app
+    def build_labels(self, lbs = None):
+        if not lbs:
+            return self._labels
+        # 合并标签
+        return dict(lbs, **self._labels)
+
+    def build_selector(self, matches):
+        # dict
+        if matches is None or isinstance(matches, dict):
+            return {
+                "matchLabels": self.build_labels(matches)
+            }
+
+        # list：逐个解析表达式
+        lables = {}
+        exprs = []
+        for mat in matches:
+            if '=' in mat: # 相等：走 matchLabels
+                key, val = re.split('\s*=\s*', mat)
+                lables[key] = val
+            else: # 其他: In/NotIn/Exists/DoesNotExist，走 matchExpressions
+                parts = re.split('\s+', mat)
+                key = parts[0]
+                op = parts[1]
+                expr = {
+                    'key': key,
+                    'operator': op
+                }
+                if op == 'In' or op == 'NotIn':
+                    expr['values'] = parts[3].split(',')
+                exprs.append(expr)
+        ret = {
+            "matchLabels": self.build_labels(lables)
         }
+        if exprs:
+            ret["matchExpressions"] = exprs
+        return ret
+
 
     def build_command(self, cmd):
         if isinstance(cmd, str):
