@@ -354,7 +354,7 @@ class Boot(YamlBoot):
     def ds(self, option):
         '''
         生成ds
-        :params option 部署选项 {node}
+        :params option 部署选项 {nodeSelector}
                         node 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
         option = self.fix_replicas_option(option, 'ds')
@@ -364,7 +364,7 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": {
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template(option.get('nodes'), option.get('tolerations'))
+                "template": self.build_pod_template(option.get('nodeSelector'), option.get('tolerations'))
             }
         }
 
@@ -374,7 +374,7 @@ class Boot(YamlBoot):
     def sts(self, option):
         '''
         生成 StatefulSet
-        :params option 部署选项 {replicas, node}
+        :params option 部署选项 {replicas, nodeSelector}
                         replicas 副本数
                         node 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
@@ -399,7 +399,7 @@ class Boot(YamlBoot):
     def deploy(self, option):
         '''
         生成部署
-        :params option 部署选项 {replicas, node}
+        :params option 部署选项 {replicas, nodeSelector}
                         replicas 副本数
                         node 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
@@ -411,7 +411,7 @@ class Boot(YamlBoot):
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template(option.get('nodes'), option.get('tolerations'))
+                "template": self.build_pod_template(option.get('nodeSelector'), option.get('tolerations'))
             }
         }
         self.save_yaml(yaml, '-deploy.yml')
@@ -420,7 +420,7 @@ class Boot(YamlBoot):
     def job(self, option):
         '''
         生成job(批处理任务)
-        :params option 部署选项 {completions, parallelism, activeDeadlineSeconds, node}
+        :params option 部署选项 {completions, parallelism, activeDeadlineSeconds, nodeSelector}
                         completions 标志Job结束需要成功运行的Pod个数，默认为1
                         parallelism 标志并行运行的Pod的个数，默认为1
                         activeDeadlineSeconds 标志失败Pod的重试最大时间，超过这个时间不会继续重试
@@ -436,7 +436,7 @@ class Boot(YamlBoot):
                 "parallelism": option.get("parallelism", 1),
                 "activeDeadlineSeconds": option.get("activeDeadlineSeconds", 1),
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template(option.get('nodes'), option.get('tolerations'))
+                "template": self.build_pod_template(option.get('nodeSelector'), option.get('tolerations'))
             }
         }
         self.save_yaml(yaml, '-job.yml')
@@ -473,10 +473,10 @@ class Boot(YamlBoot):
             ret.append(item)
         return ret
 
-    def build_pod_template(self, nodes = None, tolerations = None):
+    def build_pod_template(self, nodeSelector = None, tolerations = None):
         '''
         构建pod模板
-        :param nodes: 只有deploy才有node过滤器
+        :param nodeSelector: 只有deploy才有node过滤器
         :param tolerations: 只有deploy才有容忍
         :return:
         '''
@@ -492,8 +492,8 @@ class Boot(YamlBoot):
             }
         }
         # 只有deploy才有node过滤器
-        if nodes:
-            ret["spec"]["nodeSelector"] = nodes
+        if nodeSelector:
+            ret["spec"]["nodeSelector"] = nodeSelector
         # 只有deploy才有容忍
         if tolerations:
             ret["spec"]["tolerations"] = self.build_tolerations(tolerations)
@@ -621,12 +621,12 @@ class Boot(YamlBoot):
             else: # 其他: In/NotIn/Exists/DoesNotExist，走 matchExpressions
                 parts = re.split('\s+', mat)
                 key = parts[0]
-                op = parts[1]
+                op = parts[1].lower()
                 expr = {
                     'key': key,
-                    'operator': op
+                    'operator': op.capitalize()
                 }
-                if op == 'In' or op == 'NotIn':
+                if op == 'in' or op == 'notin':
                     expr['values'] = parts[3].split(',')
                 exprs.append(expr)
         ret = {
