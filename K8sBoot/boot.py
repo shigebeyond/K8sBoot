@@ -6,12 +6,22 @@ import hashlib
 import json
 import os
 import re
+from functools import wraps
 from urllib import parse
 from pyutilb.util import *
 from pyutilb.file import *
 from pyutilb.cmd import *
 from pyutilb import YamlBoot, BreakException
 from pyutilb.log import log
+
+# 在动作参数上进行变量替换，这样支持参数类型为str或dict或list等
+def replace_var_on_params(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        args = [replace_var(arg, False) for arg in args]
+        result = func(self, *args, **kwargs)
+        return result
+    return wrapper
 
 '''
 k8s配置生成的基于yaml的启动器
@@ -40,6 +50,7 @@ class Boot(YamlBoot):
             'ds': self.ds,
             'sts': self.sts,
             'deploy': self.deploy,
+            'initContainers': self.initContainers,
             'containers': self.containers,
         }
         self.add_actions(actions)
@@ -58,6 +69,7 @@ class Boot(YamlBoot):
         self._config_file_keys = [] # 记录文件类型的key
         self._secret_data = {} # 记录设置过的密文
         self._secret_file_keys = [] # 记录文件类型的key
+        self._init_containers = [] # 记录处理过的初始容器
         self._containers = [] # 记录处理过的容器
         self._volumes = [] # 记录容器中的卷
         self._ports = [] # 记录容器中的端口映射
@@ -71,6 +83,7 @@ class Boot(YamlBoot):
         self._config_file_keys = [] # 记录文件类型的key
         self._secret_data = {}  # 记录设置过的密文
         self._secret_file_keys = [] # 记录文件类型的key
+        self._init_containers = []  # 记录处理过的初始容器
         self._containers = []  # 记录处理过的容器
         self._volumes = []  # 记录容器中的卷
         self._ports = []  # 记录容器中的端口映射
@@ -153,6 +166,7 @@ class Boot(YamlBoot):
         # 清空app相关的属性
         self.clear_app()
 
+    @replace_var_on_params
     def labels(self, lbs):
         '''
         设置应用标签
@@ -161,6 +175,7 @@ class Boot(YamlBoot):
         '''
         self._labels.update(lbs)
 
+    @replace_var_on_params
     def config(self, data):
         '''
         以键值对的方式来设置配置
@@ -169,12 +184,11 @@ class Boot(YamlBoot):
               nginx.conf: ${read_file(./nginx.conf)}
               也可以是变量表达式，如 $cfg 或 ${read_yaml(./cfg.yml)}
         '''
-        # 替换变量，支持items是str或dict
-        data = replace_var(data, False)
         if not isinstance(data, dict):
             raise Exception('config动作参数只接受dict类型')
         self._config_data.update(data)
 
+    @replace_var_on_params
     def config_files(self, files):
         '''
         以文件内容的方式来设置配置，在挂载configmap时items默认填充用config_files()写入的key
@@ -233,6 +247,7 @@ class Boot(YamlBoot):
             }
             self.save_yaml(yaml, '-config.yml')
 
+    @replace_var_on_params
     def secret(self, data):
         '''
         生成密钥， 其实跟config差不多，只不过config是明文，secret是密文
@@ -241,12 +256,11 @@ class Boot(YamlBoot):
               nginx.conf: ${read_file(./nginx.conf)}
               也可以是变量表达式，如 $cfg 或 ${read_yaml(./cfg.yml)}
         '''
-        # 替换变量，支持items是str或dict
-        data = replace_var(data, False)
         if not isinstance(data, dict):
             raise Exception('secret动作参数只接受dict类型')
         self._secret_data.update(data)
 
+    @replace_var_on_params
     def secret_files(self, files):
         '''
         以文件内容的方式来设置配置，在挂载secret时items默认填充用secret_files()写入的key
@@ -281,6 +295,7 @@ class Boot(YamlBoot):
             return option
         raise Exception(f"动作{action}的参数非字典类型")
 
+    @replace_var_on_params
     def pod(self, _):
         '''
         生成pod
@@ -293,6 +308,7 @@ class Boot(YamlBoot):
         })
         self.save_yaml(yaml, '-pod.yml')
 
+    @replace_var_on_params
     def rc(self, option):
         '''
         生成rc
@@ -313,6 +329,7 @@ class Boot(YamlBoot):
 
         self.save_yaml(yaml, '-rc.yml')
 
+    @replace_var_on_params
     def rs(self, option):
         '''
         生成rs
@@ -333,6 +350,7 @@ class Boot(YamlBoot):
 
         self.save_yaml(yaml, '-rs.yml')
 
+    @replace_var_on_params
     def ds(self, option):
         '''
         生成ds
@@ -352,6 +370,7 @@ class Boot(YamlBoot):
 
         self.save_yaml(yaml, '-rs.yml')
 
+    @replace_var_on_params
     def sts(self, option):
         '''
         生成 StatefulSet
@@ -376,6 +395,7 @@ class Boot(YamlBoot):
 
         self._is_sts = True
 
+    @replace_var_on_params
     def deploy(self, option):
         '''
         生成部署
@@ -395,6 +415,31 @@ class Boot(YamlBoot):
             }
         }
         self.save_yaml(yaml, '-deploy.yml')
+
+    @replace_var_on_params
+    def job(self, option):
+        '''
+        生成job(批处理任务)
+        :params option 部署选项 {completions, parallelism, activeDeadlineSeconds, node}
+                        completions 标志Job结束需要成功运行的Pod个数，默认为1
+                        parallelism 标志并行运行的Pod的个数，默认为1
+                        activeDeadlineSeconds 标志失败Pod的重试最大时间，超过这个时间不会继续重试
+                        node 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+        '''
+        option = self.fix_completions_option(option, 'job')
+        yaml = {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": self.build_metadata(),
+            "spec": {
+                "completions": option.get("completions", 1),
+                "parallelism": option.get("parallelism", 1),
+                "activeDeadlineSeconds": option.get("activeDeadlineSeconds", 1),
+                "selector": self.build_selector(option.get("selector")),
+                "template": self.build_pod_template(option.get('nodes'), option.get('tolerations'))
+            }
+        }
+        self.save_yaml(yaml, '-job.yml')
 
     def build_tolerations(self, tolerations):
         '''
@@ -440,6 +485,7 @@ class Boot(YamlBoot):
                 "labels": self.build_labels()
             },
             "spec": {
+                "initContainers": self._init_containers,
                 "containers": self._containers,
                 "restartPolicy": "Always",
                 "volumes": self._volumes
@@ -447,8 +493,6 @@ class Boot(YamlBoot):
         }
         # 只有deploy才有node过滤器
         if nodes:
-            if isinstance(nodes, str):
-                nodes = replace_var(nodes, False)
             ret["spec"]["nodeSelector"] = nodes
         # 只有deploy才有容忍
         if tolerations:
@@ -518,6 +562,11 @@ class Boot(YamlBoot):
 
         self.save_yaml(yaml, '-svc.yml')
 
+    @replace_var_on_params
+    def initContainers(self, containers):
+        self._init_containers = [self.build_container(name, option) for name, option in containers.items()]
+
+    @replace_var_on_params
     def containers(self, containers):
         self._containers = [self.build_container(name, option) for name, option in containers.items()]
 
@@ -528,7 +577,8 @@ class Boot(YamlBoot):
             "image": get_and_del_dict_item(option, 'image'),
             "imagePullPolicy": get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
             "env": self.build_env(get_and_del_dict_item(option, 'env')),
-            "command": self.build_command(get_and_del_dict_item(option, 'command')),
+            "command": self.fix_command(get_and_del_dict_item(option, 'command')),
+            "lifecycle": self.build_lifecycle(get_and_del_dict_item(option, 'postStart'), get_and_del_dict_item(option, 'preStop')),
             "ports": self.build_container_ports(get_and_del_dict_item(option, 'ports')),
             "resources": self.build_resources(get_and_del_dict_item(option, "resources")),
             "volumeMounts": self.build_volume_mounts(get_and_del_dict_item(option, "volumes")),
@@ -586,6 +636,23 @@ class Boot(YamlBoot):
             ret["matchExpressions"] = exprs
         return ret
 
+    def build_lifecycle(self, postStart, preStop):
+        ret = {}
+        if postStart:
+            ret['postStart'] = {
+                "exec": {
+                    "command": self.fix_command(postStart)
+                }
+            }
+        if preStop:
+            ret['preStop'] = {
+                "exec": {
+                    "command": self.fix_command(preStop)
+                }
+            }
+        if ret:
+            return ret
+        return None
 
     def build_command(self, cmd):
         if isinstance(cmd, str):
@@ -856,7 +923,7 @@ class Boot(YamlBoot):
         # 1 无协议: 执行命令
         if "://" not in action:
             if isinstance(action, str):
-                action = re.split('\s+', action)  # 空格分割
+                action = self.fix_command(action)
             return {
                 "exec": {
                     "command": action
@@ -904,6 +971,12 @@ class Boot(YamlBoot):
             ret['httpGet']['httpHeaders'] = headers
         return ret
 
+    def fix_command(self, cmd):
+        if isinstance(cmd, str):
+            # return re.split('\s+', cmd)  # 空格分割
+            return ["/bin/bash", "-c", cmd] # bash修饰
+        return cmd
+
     # 用在变量赋值中的函数
     def from_field(self, field):
         return {
@@ -940,15 +1013,9 @@ class Boot(YamlBoot):
     def build_env(self, env):
         if env is None or len(env) == 0:
             return None
-        # 整体是变量字符串
-        is_whole_var = isinstance(env, str)
-        if is_whole_var:
-            env = replace_var(env, False)
 
         ret = []
         for key, val in env.items():
-            if not is_whole_var:
-                val = replace_var(val)
             ret.append({
                 "name": key,
                 "value": val
