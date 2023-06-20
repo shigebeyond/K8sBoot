@@ -31,6 +31,14 @@ k8s资源简写: https://zhuanlan.zhihu.com/p/369647740
 '''
 class Boot(YamlBoot):
 
+    fullnames = {
+        'rc': 'ReplicationController',
+        'rs': 'ReplicaSet',
+        'ds': 'DaemonSet',
+        'sts': 'StatefulSet',
+        'deploy': 'Deployment',
+    }
+
     def __init__(self):
         super().__init__()
         # step_dir作为当前目录
@@ -50,6 +58,7 @@ class Boot(YamlBoot):
             'ds': self.ds,
             'sts': self.sts,
             'deploy': self.deploy,
+            'hpa': self.hpa,
             'initContainers': self.initContainers,
             'containers': self.containers,
         }
@@ -69,7 +78,7 @@ class Boot(YamlBoot):
         self._config_file_keys = [] # 记录文件类型的key
         self._secret_data = {} # 记录设置过的密文
         self._secret_file_keys = [] # 记录文件类型的key
-        self._init_containers = [] # 记录处理过的初始容器
+        self._init_containers = None # 记录处理过的初始容器
         self._containers = [] # 记录处理过的容器
         self._volumes = [] # 记录容器中的卷
         self._ports = [] # 记录容器中的端口映射
@@ -83,7 +92,7 @@ class Boot(YamlBoot):
         self._config_file_keys = [] # 记录文件类型的key
         self._secret_data = {}  # 记录设置过的密文
         self._secret_file_keys = [] # 记录文件类型的key
-        self._init_containers = []  # 记录处理过的初始容器
+        self._init_containers = None  # 记录处理过的初始容器
         self._containers = []  # 记录处理过的容器
         self._volumes = []  # 记录容器中的卷
         self._ports = []  # 记录容器中的端口映射
@@ -441,6 +450,68 @@ class Boot(YamlBoot):
         }
         self.save_yaml(yaml, '-job.yml')
 
+    @replace_var_on_params
+    def hpa(self, option):
+        '''
+        生成hpa
+        :param option hpa选项 { deployment子动作, by }
+                      deployment子动作，参考 deploy()，其中参数中的 replicas 是包含最小与最大值，如 1~10
+                      by 扩容的度量指标，如 'cpu': 80, 'memory': 80
+        '''
+        # 扩容的度量指标
+        by = get_and_del_dict_item(option, 'by')
+        # 应该只剩下一个key，是关于deployment的子动作
+        action = get_dict_first_key(option)
+        params = option[action]
+        replicas = params['replicas'].split('~', 1) # 最小值 + 最大值
+        params['replicas'] = int(replicas[0]) # deployment子动作只需要最小值
+        # 调用deployment子动作
+        func = getattr(self, action)
+        func(params)
+        # 拼接 hpa
+        yaml = {
+            "apiVersion": "autoscaling/v2",
+            "kind": "HorizontalPodAutoscaler",
+            "metadata": self.build_metadata(),
+            "spec": {
+                "minReplicas": int(replicas[0]), # 最小副本数
+                "maxReplicas": int(replicas[1]), # 最大副本数
+                "scaleTargetRef": { # 绑定 deployment
+                    "apiVersion": "apps/v1",
+                    "kind": self.fullnames[action],
+                    "name": self._app
+                },
+                "metrics": self.build_hpa_metrics(by) # 扩容的度量指标
+            }
+        }
+        self.save_yaml(yaml, '-hpa.yml')
+
+    # 构建扩容的度量指标
+    def build_hpa_metrics(self, by):
+        ret = []
+        for key, val in by.items():
+            # key: cpu/memory
+            # val: 以%结尾则表示是使用率(百分比)，否则是使用量(绝对值)
+            if val.endswith('%'): # 使用率
+                target = {
+                    "type": "Utilization",
+                    "averageUtilization": float(val[:-1])
+                }
+            else: # 使用量
+                target = {
+                    "type": "AverageValue",
+                    "averageValue": val
+                }
+            met = {
+                "type": "Resource",
+                "resource": {
+                    "name": key,
+                    "target": target
+                }
+            }
+            ret.append(met)
+        return ret
+
     def build_tolerations(self, tolerations):
         '''
         构建容忍
@@ -480,16 +551,18 @@ class Boot(YamlBoot):
         :param tolerations: 只有deploy才有容忍
         :return:
         '''
+        spec = {
+            "initContainers": self._init_containers,
+            "containers": self._containers,
+            "restartPolicy": "Always",
+            "volumes": self._volumes
+        }
+        del_dict_none_item(spec)
         ret = {
             "metadata": {
                 "labels": self.build_labels()
             },
-            "spec": {
-                "initContainers": self._init_containers,
-                "containers": self._containers,
-                "restartPolicy": "Always",
-                "volumes": self._volumes
-            }
+            "spec": spec
         }
         # 只有deploy才有node过滤器
         if nodeSelector:
@@ -564,7 +637,8 @@ class Boot(YamlBoot):
 
     @replace_var_on_params
     def initContainers(self, containers):
-        self._init_containers = [self.build_container(name, option) for name, option in containers.items()]
+        if containers:
+            self._init_containers = [self.build_container(name, option) for name, option in containers.items()]
 
     @replace_var_on_params
     def containers(self, containers):
@@ -692,11 +766,15 @@ class Boot(YamlBoot):
         if option is None or len(option) == 0:
             return None
         # 分割最小值与最大值
-        cpus = option.get("cpus", "").split('~', 1)
-        mems = option.get("memory", "").split('~', 1)
+        cpus = option.get("cpu", [])
+        if cpus:
+            cpus = cpus.split('~', 1)
+        mems = option.get("memory", [])
+        if mems:
+            mems = mems.split('~', 1)
         # 最小值
         ret = {
-            "requests": self.build_resource_item(cpus[0], mems[0])
+            "requests": self.build_resource_item(get_list_item(cpus, 0), get_list_item(mems, 0))
         }
         # 最大值
         if len(cpus) > 1 or len(mems) > 1:
@@ -705,9 +783,9 @@ class Boot(YamlBoot):
 
     def build_resource_item(self, cpu, mem):
         ret = {}
-        if not cpu:
-            ret["cpus"] = cpu
-        if not mem:
+        if cpu:
+            ret["cpu"] = cpu
+        if mem:
             ret["memory"] = mem
         return ret
 
@@ -782,7 +860,7 @@ class Boot(YamlBoot):
         items = [{'key': key, 'path': key} for key in keys]
 
         # 2.2 记录到第二层的 items 属性
-        type = list(volume.keys())[0]
+        type = get_dict_first_key(volume)
         volume[type]['items'] = items
 
     def build_volume_mounts(self, mounts):
@@ -945,7 +1023,7 @@ class Boot(YamlBoot):
             host = host_and_port
             port = 80
         # 2.1 tcp
-        if url.scheme == 'tcp':
+        if url.scheme.lower() == 'tcp':
             return {
                 'tcpSocket': {
                     'port': port
@@ -957,6 +1035,7 @@ class Boot(YamlBoot):
             path = path + '?' + url.query
         ret= {
             'httpGet': {
+                'scheme': url.scheme.upper(),
                 'port': port,
                 'path': path,
             }
@@ -1043,5 +1122,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # data = read_yaml('/home/shi/code/k8s/k8s-demo-master/test-k8s/yaml/configmap/secret.yaml')
+    # data = read_yaml('/home/shi/code/k8s/k8s-demo-master/test.yaml')
     # print(json.dumps(data))

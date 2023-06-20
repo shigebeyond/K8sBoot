@@ -1,0 +1,19 @@
+# https://kubernetes.io/zh-cn/docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/
+- app(php-apache):
+    - config:
+        auther: shigebeyond
+    - containers:
+        php-apache:
+          image: registry.k8s.io/hpa-example
+          ports: # 端口映射
+            - 80:80 # 服务端口:容器端口
+          resources:
+            cpu: 200m~500m
+
+    # 部署
+    - hpa:
+        by: # 扩容的度量指标
+          cpu: 50%
+#          memory: 50%
+        deploy:
+          replicas: 1~3 # 副本数的最小值+最大值，应用在hpa

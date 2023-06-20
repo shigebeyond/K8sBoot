@@ -38,6 +38,9 @@
             seconds: i=5 p=5 t=5 s=1 f=5 # 简写
             # 动作
             action: http://localhost:80 # 在pod中执行，请使用容器端口
+          resources: # 资源
+            cpu: 0.01
+            memory: 50Mi
 
     # 部署
      # 简写
@@ -59,7 +62,7 @@
 #    - pod:
     - deploy:
         replicas: 1 # 副本数
-        nodes: # 节点选择
+        nodeSelector: # 节点选择
           beta.kubernetes.io/os: linux
         tolerations: # 容忍
 #          - node-role.kubernetes.io/master:NoSchedule
