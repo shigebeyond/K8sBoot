@@ -107,6 +107,14 @@ class Boot(YamlBoot):
         file = os.path.join(self._app, self._app + file_postfix)
         write_file(file, yaml.dump(data))
 
+    def print_apply_cmd(self):
+        '''
+        打印 kubectl apply 命令
+        '''
+        dir = os.path.abspath(self._app)
+        cmd = f'App[{self._app}]的资源配置文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl apply --record=true -f {dir}'
+        log.info(cmd)
+
     # --------- 动作处理的函数 --------
     # 修正节点标签
     def node_labels(self, config):
@@ -172,6 +180,8 @@ class Boot(YamlBoot):
         self.secretmap()
         # 生成service：暴露端口
         self.service()
+        # 打印 kubectl apply 命令
+        self.print_apply_cmd()
         # 清空app相关的属性
         self.clear_app()
 
@@ -766,12 +776,8 @@ class Boot(YamlBoot):
         if option is None or len(option) == 0:
             return None
         # 分割最小值与最大值
-        cpus = option.get("cpu", [])
-        if cpus:
-            cpus = cpus.split('~', 1)
-        mems = option.get("memory", [])
-        if mems:
-            mems = mems.split('~', 1)
+        cpus = self.split_resource_span(option.get("cpu"))
+        mems = self.split_resource_span(option.get("memory"))
         # 最小值
         ret = {
             "requests": self.build_resource_item(get_list_item(cpus, 0), get_list_item(mems, 0))
@@ -780,6 +786,23 @@ class Boot(YamlBoot):
         if len(cpus) > 1 or len(mems) > 1:
             ret["limits"] = self.build_resource_item(get_list_item(cpus, 1), get_list_item(mems, 1))
         return ret
+
+    def split_resource_span(self, span):
+        '''
+        分解资源的最小值与最大值
+        :param span: 资源范围表达式： 最小值~最大值
+        :return: 要返回list
+        '''
+        if not span:
+            return []
+
+        if isinstance(span, (list, set)):
+            return span
+
+        if isinstance(span, str):
+            return span.split('~', 1)
+
+        return [span]
 
     def build_resource_item(self, cpu, mem):
         ret = {}

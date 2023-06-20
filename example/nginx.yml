@@ -17,6 +17,8 @@
           image: nginx
           env:
             TZ: Asia/Shanghai
+            POD_NAME: ${from_field(metadata.name)}
+            POD_IP: ${from_field(status.podIP)}
           ports: # 端口映射
             - 30000:80 # 服务端口:容器端口
             #- 30000:30000:80 # 宿主机端口:服务端口:容器端口
