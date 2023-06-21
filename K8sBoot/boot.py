@@ -65,9 +65,10 @@ class Boot(YamlBoot):
         self.add_actions(actions)
         # 自定义函数
         funcs = {
-            'from_field': self.from_field,
-            'from_config': self.from_config,
-            'from_secret': self.from_secret,
+            'ref_pod_field': self.ref_pod_field,
+            'ref_resource_field': self.ref_resource_field,
+            'ref_config': self.ref_config,
+            'ref_secret': self.ref_secret,
         }
         custom_funs.update(funcs)
 
@@ -87,6 +88,7 @@ class Boot(YamlBoot):
     # 清空app相关的属性
     def clear_app(self):
         self._app = ''  # 应用名
+        set_var('app', None)
         self._labels = {}  # 记录标签
         self._config_data = {}  # 记录设置过的配置
         self._config_file_keys = [] # 记录文件类型的key
@@ -650,12 +652,15 @@ class Boot(YamlBoot):
         if containers:
             self._init_containers = [self.build_container(name, option) for name, option in containers.items()]
 
-    @replace_var_on_params
+    # 不使用 @replace_var_on_params：containers的选项中如果存在用ref_resource_field()的变量表达式来注入env时，而ref_resource_field()是依赖当前容器名，而containers()没执行前是不知道的，因此不能提前替换变量(执行@replace_var_on_params)
     def containers(self, containers):
         self._containers = [self.build_container(name, option) for name, option in containers.items()]
 
     # 构建容器
     def build_container(self, name, option):
+        # 拿到容器名，才能对option替换变量
+        self._curr_container = name
+        option = replace_var(option, False)
         ret = {
             "name": name,
             "image": get_and_del_dict_item(option, 'image'),
@@ -842,29 +847,56 @@ class Boot(YamlBoot):
             }
         # configmap: https://blog.csdn.net/weixin_45880055/article/details/117590045
         if protocol == 'config':
-            ret = {
+            return {
                 'configMap': {
                     'name': self._app,
+                    # 指定items(配置挂载的key)
+                    # items的作用是 1指定key挂载到不同名到文件上 2过滤要挂载的key，否则挂载全部key
+                    # self._config_file_keys默认挂载的文件类型的key，仅当host_path没指定时用到
+                    'items': self.build_config_volume_items(host_path or self._config_file_keys)
                 }
             }
-            # 指定items(配置挂载的key)
-            # items的作用是 1指定key挂载到不同名到文件上 2过滤要挂载的key，否则挂载全部key
-            # self._config_file_keys默认挂载的文件类型的key，仅当host_path没指定时用到
-            self.build_config_volume_items(host_path or self._config_file_keys, ret)
-            return ret
         # secret: https://www.cnblogs.com/litzhiai/p/11950273.html
         if protocol == 'secret':
-            ret = {
+            return {
                 'secret': {
                     'secretName': host_path,
+                    'items': self.build_config_volume_items(host_path or self._secret_file_keys) # 跟config实现一样
                 }
             }
-            # 跟config实现一样
-            self.build_config_volume_items(host_path or self._secret_file_keys, ret)
-            return ret
+        # downwardAPI: https://blog.csdn.net/ens160/article/details/124446138
+        if protocol == 'downwardAPI':
+            return {
+                "downwardAPI": {
+                    "items": self.build_downwardapi_volume_items(host_path)
+                }
+            }
         raise Exception(f'暂不支持卷协议: {protocol}')
 
-    def build_config_volume_items(self, keys, volume):
+    def build_downwardapi_volume_items(self, host_path):
+        '''
+        指定items(downwardAPI挂载的key)
+        items的作用是 1指定key挂载到不同名到文件上 2过滤要挂载的key，否则挂载全部key
+        :param: host_path 对应要挂载的key
+        '''
+        # 1 key
+        # 没指定key，则挂载所有key
+        keys = ['labels', 'annotations']
+        if host_path: # 有指定key
+            if host_path not in keys:
+                raise Exception(f"downwardAPI协议的挂载key只接受{keys}")
+            keys = [host_path]
+
+        # 2 根据key拼接item
+        return [{
+                    "path": key,
+                    "fieldRef": {
+                        "fieldPath": f"metadata.{key}"
+                    }
+                } for key in keys]
+
+
+    def build_config_volume_items(self, keys):
         '''
         指定items(配置挂载的key)
         items的作用是 1指定key挂载到不同名到文件上 2过滤要挂载的key，否则挂载全部key
@@ -880,21 +912,21 @@ class Boot(YamlBoot):
         # 2.1 根据key拼接item
         if isinstance(keys, str): # 单个key
             keys = [keys]
-        items = [{'key': key, 'path': key} for key in keys]
+        return [{'key': key, 'path': key} for key in keys]
 
-        # 2.2 记录到第二层的 items 属性
-        type = get_dict_first_key(volume)
-        volume[type]['items'] = items
 
     def build_volume_mounts(self, mounts):
         '''
         构建目录映射
         :params mounts 多行，格式为
+                    /lnmp/www/:/www -- 无协议，挂载目录或文件(k8s自动识别)
                     dir:///apps/fpm729/etc/php-fpm/:/usr/local/etc/php-fpm.d/:rw -- 挂载目录
                     file:///var/run/docker.sock:/var/run/docker.sock:ro -- 挂载文件，只读
                     nfs://192.168.159.14/data:/mnt -- 挂载nfs
-                    config://:/etc/nginx/conf.d -- 将configmap挂载为目录，如果有调用config_files()则挂载文件类型的key，否则挂载所有的key
+                    config://:/etc/nginx/conf.d -- 将configmap挂载为目录
                     config://nginx.conf:/etc/nginx/nginx.conf -- 将configmap中key=nginx.conf的单个配置项挂载为文件，不同的key写不同的行
+                    downwardAPI://:/etc/podinfo -- 将元数据labels和annotations以文件的形式挂载到目录
+                    downwardAPI://labels:/etc/podinfo/labels.properties -- 将元数据labels挂载为文件
         '''
         if mounts is None or len(mounts) == 0:
             return None
@@ -910,12 +942,14 @@ class Boot(YamlBoot):
                 ro = mat.group(0) == ':ro'
             '''
             2 解析协议
+            /lnmp/www/:/www -- 无协议，挂载目录或文件(k8s自动识别)
             dir:///apps/fpm729/etc/php-fpm/:/usr/local/etc/php-fpm.d/:rw -- 挂载目录
             file:///var/run/docker.sock:/var/run/docker.sock:ro -- 挂载文件，只读
-            /lnmp/www/:/www -- 挂载目录或文件
             nfs://192.168.159.14/data:/mnt -- 挂载nfs
             config://:/etc/nginx/conf.d -- 将configmap挂载为目录
             config://nginx.conf:/etc/nginx/nginx.conf -- 将configmap中key=nginx.conf的单个配置项挂载为文件，不同的key写不同的行
+            downwardAPI://:/etc/podinfo -- 将元数据labels和annotations以文件的形式挂载到目录
+            downwardAPI://labels:/etc/podinfo/labels.properties -- 将元数据labels挂载为文件
             '''
             protocol = None
             if "://" in mount: # 有协议
@@ -952,9 +986,9 @@ class Boot(YamlBoot):
                 "name": name,
                 "mountPath": mount_path
             }
-            # 一般configmap/secret要挂载为目录，但如果指定了 host_path 表示只挂载单个key为文件
+            # 一般configmap/secret/downwardAPI要挂载为目录，但如果指定了 host_path 表示只挂载单个key为文件
             # host_path为key，mountPath为挂载的容器文件路径
-            if (protocol == 'config' or protocol == 'secret') and host_path:
+            if (protocol == 'config' or protocol == 'secret' or protocol == 'downwardAPI') and host_path:
                 yaml['subPath'] = host_path
             # 只读
             if ro:
@@ -1079,35 +1113,50 @@ class Boot(YamlBoot):
             return ["/bin/bash", "-c", cmd] # bash修饰
         return cmd
 
-    # 用在变量赋值中的函数
-    def from_field(self, field):
+    def ref_pod_field(self, field):
+        '''
+        在给环境变量赋时值，注入Pod信息
+        :param field Pod信息字段，仅支持 metadata.name, metadata.namespace, metadata.uid, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs
+        '''
         return {
-            "valueFrom": {
-                "fieldRef": {
-                    "fieldPath": field
-                }
+            "fieldRef": {
+                "fieldPath": field
             }
         }
 
-    # 用在变量赋值中的函数
-    def from_config(self, key):
+    def ref_resource_field(self, field):
+        '''
+        在给环境变量赋值时，注入容器资源信息
+        :param field 容器资源信息字段
+        '''
         return {
-            "valueFrom":{
-                "configMapKeyRef":{
-                  "name": self._app, # The ConfigMap this value comes from.
-                  "key": key # The key to fetch.
-                }
+            "resourceFieldRef": {
+                "containerName": self._curr_container,
+                "resource": field
             }
         }
 
-    # 用在变量赋值中的函数
-    def from_secret(self, key):
+    def ref_config(self, key):
+        '''
+        在给环境变量赋值时，注入配置信息
+        :param key
+        '''
         return {
-            "valueFrom":{
-                "secretKeyRef":{
-                  "name": self._app, # The Secret this value comes from.
-                  "key": key # The key to fetch.
-                }
+            "configMapKeyRef":{
+              "name": self._app, # The ConfigMap this value comes from.
+              "key": key # The key to fetch.
+            }
+        }
+
+    def ref_secret(self, key):
+        '''
+        在给环境变量赋值时，注入secret信息
+        :param key
+        '''
+        return {
+            "secretKeyRef":{
+              "name": self._app, # The Secret this value comes from.
+              "key": key # The key to fetch.
             }
         }
 
@@ -1118,10 +1167,14 @@ class Boot(YamlBoot):
 
         ret = []
         for key, val in env.items():
-            ret.append({
+            item = {
                 "name": key,
-                "value": val
-            })
+            }
+            if isinstance(val, str):
+                item["value"] = val
+            else:
+                item["valueFrom"] = val
+            ret.append(item)
         return ret
 
 # cli入口

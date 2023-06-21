@@ -17,8 +17,17 @@
           image: nginx
           env:
             TZ: Asia/Shanghai
-            POD_NAME: ${from_field(metadata.name)}
-            POD_IP: ${from_field(status.podIP)}
+            # 引用pod信息
+            POD_NAME: ${ref_pod_field(metadata.name)}
+            POD_NAMESPACE: ${ref_pod_field(metadata.namespace)}
+            POD_IP: ${ref_pod_field(status.podIP)}
+            # 引用容器资源信息
+            CPU_MIN: ${ref_resource_field(requests.cpu)}
+            CPU_MAX: ${ref_resource_field(limits.cpu)}
+            MEM_MIN: ${ref_resource_field(requests.memory)}
+            MEM_MAX: ${ref_resource_field(limits.memory)}
+            # 引用配置
+            AUTHOR: ${ref_config(auther)}
           ports: # 端口映射
             - 30000:80 # 服务端口:容器端口
             #- 30000:30000:80 # 宿主机端口:服务端口:容器端口
@@ -28,6 +37,8 @@
             # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
             - config://:/usr/share/nginx/html # 挂载configmap所有key到目录
             - config://nginx.conf:/etc/nginx/nginx.conf # 挂载configmap单个key到文件
+            - downwardAPI://:/etc/podinfo # 将元数据labels和annotations以文件的形式挂载到目录
+            - downwardAPI://labels:/etc/podinfo2/labels.properties # 将元数据labels挂载为文件
           ready?: # 就绪态
             # 各种秒数
             #seconds: initialDelaySeconds=5 periodSeconds=5 timeoutSeconds=5 successThreshold=1 failureThreshold=5 # 全写

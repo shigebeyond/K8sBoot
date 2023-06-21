@@ -14,7 +14,7 @@
     # 部署
     - hpa:
         by: # 扩容的度量指标
-          memory: 50%
+          memory: 50% # 尾部带%表示用使用率(百分比)，否则用使用量(绝对值)
           cpu: 50%
-        deploy:
+        deploy: # 部署相关的子动作，可以是 rc/rs/deploy 等
           replicas: 1~3 # 副本数的最小值+最大值，应用在hpa
