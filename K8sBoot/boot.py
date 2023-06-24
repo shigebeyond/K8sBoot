@@ -49,7 +49,7 @@ class Boot(YamlBoot):
             'app': self.app,
             'labels': self.labels,
             'config': self.config,
-            'config_files': self.config_files,
+            'config_from_files': self.config_from_files,
             'secret': self.secret,
             'secret_files': self.secret_files,
             'pod': self.pod,
@@ -81,7 +81,7 @@ class Boot(YamlBoot):
         self._secret_file_keys = [] # 记录文件类型的key
         self._init_containers = None # 记录处理过的初始容器
         self._containers = [] # 记录处理过的容器
-        self._volumes = [] # 记录容器中的卷
+        self._volumes = {} # 记录容器中的卷，key是卷名，value是卷信息
         self._ports = [] # 记录容器中的端口映射
         self._is_sts = False # 是否用 statefulset 来部署
 
@@ -96,7 +96,7 @@ class Boot(YamlBoot):
         self._secret_file_keys = [] # 记录文件类型的key
         self._init_containers = None  # 记录处理过的初始容器
         self._containers = []  # 记录处理过的容器
-        self._volumes = []  # 记录容器中的卷
+        self._volumes = {}  # 记录容器中的卷，key是卷名，value是卷信息
         self._ports = []  # 记录容器中的端口映射
         self._is_sts = False  # 是否用 statefulset 来部署
 
@@ -210,9 +210,9 @@ class Boot(YamlBoot):
         self._config_data.update(data)
 
     @replace_var_on_params
-    def config_files(self, files):
+    def config_from_files(self, files):
         '''
-        以文件内容的方式来设置配置，在挂载configmap时items默认填充用config_files()写入的key
+        以文件内容的方式来设置配置，在挂载configmap时items默认填充用config_from_files()写入的key
         :param files 配置文件list或dict或目录
                   dict类型： key是配置项名，value是文件路径，如 nginx.conf: ./nginx.conf
                   list类型： 元素是文件路径，会用文件名作为key
@@ -240,7 +240,7 @@ class Boot(YamlBoot):
         if isinstance(files, str):
             path = files
             if not os.path.exists(path):
-                raise Exception(f"config_files/secret_files动作参数[{path}]因是str类型而被认定为目录或文件，但目录或文件不存在")
+                raise Exception(f"config_from_files/secret_files动作参数[{path}]因是str类型而被认定为目录或文件，但目录或文件不存在")
             if os.path.isdir(path): # 目录
                 files = [os.path.join(path, f) for f in os.listdir(path)]
             else: # 文件
@@ -255,7 +255,7 @@ class Boot(YamlBoot):
             return ret
 
         # 4 其他: 报错
-        raise Exception(f"config_files/secret_files动作参数只接受dict/list/str类型，而实际参数是: {files}")
+        raise Exception(f"config_from_files/secret_files动作参数只接受dict/list/str类型，而实际参数是: {files}")
 
     # 生成配置
     def configmap(self):
@@ -567,7 +567,7 @@ class Boot(YamlBoot):
             "initContainers": self._init_containers,
             "containers": self._containers,
             "restartPolicy": "Always",
-            "volumes": self._volumes
+            "volumes": list(self._volumes.values())
         }
         del_dict_none_item(spec)
         ret = {
@@ -666,6 +666,7 @@ class Boot(YamlBoot):
             "image": get_and_del_dict_item(option, 'image'),
             "imagePullPolicy": get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
             "env": self.build_env(get_and_del_dict_item(option, 'env')),
+            "env_from": self.build_env_from(get_and_del_dict_item(option, 'env_from')),
             "command": self.fix_command(get_and_del_dict_item(option, 'command')),
             "lifecycle": self.build_lifecycle(get_and_del_dict_item(option, 'postStart'), get_and_del_dict_item(option, 'preStop')),
             "ports": self.build_container_ports(get_and_del_dict_item(option, 'ports')),
@@ -821,6 +822,11 @@ class Boot(YamlBoot):
     # https://blog.csdn.net/weixin_43849415/article/details/108630142
     # https://www.cnblogs.com/RRecal/p/15699245.html
     def build_volume(self, protocol, host, host_path):
+        # 临时目录
+        if protocol == 'emptyDir':
+            return {
+                "emptyDir": {}
+            }
         # 本地文件
         if protocol == 'file':
             return {
@@ -917,9 +923,11 @@ class Boot(YamlBoot):
 
     def build_volume_mounts(self, mounts):
         '''
-        构建目录映射
+        构建卷映射
         :params mounts 多行，格式为
-                    /lnmp/www/:/www -- 无协议，挂载目录或文件(k8s自动识别)
+                    /var/log/nginx -- 无协议+无本地卷映射，临时目录 emptyDir
+                    emptyDir://:/var/log/nginx -- 挂载临时目录 emptyDir，如果你要换卷名，可以在emptyDir://后加数字，如emptyDir://1:/var/log/nginx
+                    /lnmp/www/:/www -- 无协议+有本地卷映射，挂载目录或文件(k8s自动识别)
                     dir:///apps/fpm729/etc/php-fpm/:/usr/local/etc/php-fpm.d/:rw -- 挂载目录
                     file:///var/run/docker.sock:/var/run/docker.sock:ro -- 挂载文件，只读
                     nfs://192.168.159.14/data:/mnt -- 挂载nfs
@@ -927,6 +935,7 @@ class Boot(YamlBoot):
                     config://nginx.conf:/etc/nginx/nginx.conf -- 将configmap中key=nginx.conf的单个配置项挂载为文件，不同的key写不同的行
                     downwardAPI://:/etc/podinfo -- 将元数据labels和annotations以文件的形式挂载到目录
                     downwardAPI://labels:/etc/podinfo/labels.properties -- 将元数据labels挂载为文件
+                    其中生成的卷名为 vol-md5(最后一个:之前的部分)
         '''
         if mounts is None or len(mounts) == 0:
             return None
@@ -940,17 +949,10 @@ class Boot(YamlBoot):
             mat = re.search(':r[wo]', mount)
             if mat is not None:
                 ro = mat.group(0) == ':ro'
-            '''
-            2 解析协议
-            /lnmp/www/:/www -- 无协议，挂载目录或文件(k8s自动识别)
-            dir:///apps/fpm729/etc/php-fpm/:/usr/local/etc/php-fpm.d/:rw -- 挂载目录
-            file:///var/run/docker.sock:/var/run/docker.sock:ro -- 挂载文件，只读
-            nfs://192.168.159.14/data:/mnt -- 挂载nfs
-            config://:/etc/nginx/conf.d -- 将configmap挂载为目录
-            config://nginx.conf:/etc/nginx/nginx.conf -- 将configmap中key=nginx.conf的单个配置项挂载为文件，不同的key写不同的行
-            downwardAPI://:/etc/podinfo -- 将元数据labels和annotations以文件的形式挂载到目录
-            downwardAPI://labels:/etc/podinfo/labels.properties -- 将元数据labels挂载为文件
-            '''
+
+            # 2 解析协议：协议格式参考函数注释
+            if ':' not in mount:
+                mount = f"emptyDir://:{mount}"
             protocol = None
             if "://" in mount: # 有协议
                 #  mat = re.search('(\w+)://([\w\d\._]*)(/.+):(.+)', mount)
@@ -966,7 +968,7 @@ class Boot(YamlBoot):
                     host = ''
                     host_path = host_and_path
                 vol = self.build_volume(protocol, host, host_path)
-            elif ':' in mount: # 无协议，有本地卷映射，如 /lnmp/www/:/www
+            elif ':' in mount: # 无协议+有本地卷映射，如 /lnmp/www/:/www
                 host_path, mount_path = mount.split(':', 1)
                 vol = {
                     'hostPath': {
@@ -974,14 +976,14 @@ class Boot(YamlBoot):
                     }
                 }
             else:
-                mount_path = mount
-                vol = {
-                    "emptyDir": {}
-                }
+                raise Exception(f'无法识别卷映射路径: {mount}')
 
             # 3 记录挂载
+            # 卷名为 vol-md5(最后一个:之前的部分)
             # name = 'vol-' + random_str(10)
-            name = 'vol-' + md5(mount_path)
+            # name = 'vol-' + md5(mount_path)
+            name = mount.rsplit(':', 1)[0]
+            name = 'vol-' + md5(name)
             yaml = {
                 "name": name,
                 "mountPath": mount_path
@@ -997,7 +999,7 @@ class Boot(YamlBoot):
 
             # 4 记录卷
             vol["name"] = name
-            self._volumes.append(vol)
+            self._volumes[name] = vol # 用name来去重
         return ret
 
     def build_probe(self, option):
@@ -1174,6 +1176,28 @@ class Boot(YamlBoot):
                 item["value"] = val
             else:
                 item["valueFrom"] = val
+            ret.append(item)
+        return ret
+
+    # 构建容器中的环境变量
+    def build_env_from(self, env_from):
+        if env_from is None or len(env_from) == 0:
+            return None
+
+        if isinstance(env_from, str):
+            env_from = [env_from]
+        ret = []
+        for val in env_from:
+            if isinstance(val, str):
+                if val == 'config':
+                    val = "configMapRef"
+                else:
+                    val = "secretRef"
+                item = {
+                    val: {
+                        "name": self._app
+                    }
+                }
             ret.append(item)
         return ret
 

@@ -2,15 +2,15 @@
     - config:
         auther: shigebeyond
         #nginx.conf: ${read_file(./nginx.conf)}
-#    - config_files: ./nginx.conf # 单个文件
-#    - config_files: ./conf/ # 目录
-    - config_files: # 文件list
+#    - config_from_files: ./nginx.conf # 单个文件
+#    - config_from_files: ./conf/ # 目录
+    - config_from_files: # 文件list
         - ./nginx.conf
         - ./index.html
-#    - config_files: # 文件dict，key是配置名，value是文件路径
+#    - config_from_files: # 文件dict，key是配置名，value是文件路径
 #        nginx.conf: ./nginx.conf
 
-#    - secret_files: ./nginx.conf # 与 config_files 调用一样
+#    - secret_files: ./nginx.conf # 与 config_from_files 调用一样
 
     - containers:
         nginx:
@@ -28,11 +28,15 @@
             MEM_MAX: ${ref_resource_field(limits.memory)}
             # 引用配置
             AUTHOR: ${ref_config(auther)}
+          env_from:
+            - config
+            - secret
           ports: # 端口映射
             - 30000:80 # 服务端口:容器端口
             #- 30000:30000:80 # 宿主机端口:服务端口:容器端口
             #- udp://30000:80 # 前面加协议
           volumes: # 卷映射
+            - /var/log/nginx
             - /lnmp/www:/www
             # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
             - config://:/usr/share/nginx/html # 挂载configmap所有key到目录
