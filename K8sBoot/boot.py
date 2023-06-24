@@ -926,7 +926,7 @@ class Boot(YamlBoot):
         构建卷映射
         :params mounts 多行，格式为
                     /var/log/nginx -- 无协议+无本地卷映射，临时目录 emptyDir
-                    emptyDir://:/var/log/nginx -- 挂载临时目录 emptyDir，如果你要换卷名，可以在emptyDir://后加数字，如emptyDir://1:/var/log/nginx
+                    emptyDir://:/var/log/nginx -- 挂载临时目录 emptyDir，如果你要换卷名，可以在emptyDir://后加数字(没啥用，只是为了区分卷名)，如emptyDir://1:/var/log/nginx
                     /lnmp/www/:/www -- 无协议+有本地卷映射，挂载目录或文件(k8s自动识别)
                     dir:///apps/fpm729/etc/php-fpm/:/usr/local/etc/php-fpm.d/:rw -- 挂载目录
                     file:///var/run/docker.sock:/var/run/docker.sock:ro -- 挂载文件，只读
