@@ -321,7 +321,7 @@ class Boot(YamlBoot):
         '''
         生成pod
         '''
-        yaml = self.build_pod_template()
+        yaml = self.build_pod_template(option)
         yaml.update({
             "apiVersion": "v1",
             "kind": "Pod",
@@ -344,7 +344,7 @@ class Boot(YamlBoot):
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template()
+                "template": self.build_pod_template(option)
             }
         }
 
@@ -365,7 +365,7 @@ class Boot(YamlBoot):
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template()
+                "template": self.build_pod_template(option)
             }
         }
 
@@ -374,9 +374,9 @@ class Boot(YamlBoot):
     @replace_var_on_params
     def ds(self, option):
         '''
-        生成ds
+        生成ds：每个node运行一个pod，因此不需要 replicas 选项
         :params option 部署选项 {nodeSelector}
-                        node 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
         option = self.fix_replicas_option(option, 'ds')
         yaml = {
@@ -385,7 +385,7 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": {
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template(option.get('nodeSelector'), option.get('tolerations'))
+                "template": self.build_pod_template(option)
             }
         }
 
@@ -397,7 +397,7 @@ class Boot(YamlBoot):
         生成 StatefulSet
         :params option 部署选项 {replicas, nodeSelector}
                         replicas 副本数
-                        node 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
         option = self.fix_replicas_option(option, 'sts')
         yaml = {
@@ -408,7 +408,7 @@ class Boot(YamlBoot):
                 "replicas": option.get("replicas", 1),
                 "serviceName": self._app,
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template()
+                "template": self.build_pod_template(option)
             }
         }
 
@@ -422,7 +422,7 @@ class Boot(YamlBoot):
         生成部署
         :params option 部署选项 {replicas, nodeSelector}
                         replicas 副本数
-                        node 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
         option = self.fix_replicas_option(option, 'deploy')
         yaml = {
@@ -432,7 +432,7 @@ class Boot(YamlBoot):
             "spec": {
                 "replicas": option.get("replicas", 1),
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template(option.get('nodeSelector'), option.get('tolerations'))
+                "template": self.build_pod_template(option)
             }
         }
         self.save_yaml(yaml, '-deploy.yml')
@@ -441,24 +441,69 @@ class Boot(YamlBoot):
     def job(self, option):
         '''
         生成job(批处理任务)
-        :params option 部署选项 {completions, parallelism, activeDeadlineSeconds, nodeSelector}
-                        completions 标志Job结束需要成功运行的Pod个数，默认为1
-                        parallelism 标志并行运行的Pod的个数，默认为1
-                        activeDeadlineSeconds 标志失败Pod的重试最大时间，超过这个时间不会继续重试
-                        node 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+        :params option 部署选项 {completions, parallelism, activeDeadlineSeconds, backoffLimit, ttlSecondsAfterFinished, nodeSelector}
+                        completions 标志Job结束需要成功运行的Pod个数
+                        parallelism 标志并行运行的Pod的个数
+                        activeDeadlineSeconds 表示 Pod 可以运行的最长时间，达到设置的该值后，Pod 会自动停止，优先于 backoffLimit
+                        backoffLimit 最大允许失败的次数
+                        ttlSecondsAfterFinished 任务完成后的n秒后自动删除pod
+                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
-        option = self.fix_completions_option(option, 'job')
         yaml = {
             "apiVersion": "apps/v1",
-            "kind": "Deployment",
+            "kind": "Job",
             "metadata": self.build_metadata(),
+            **self.build_job(option)
+        }
+        self.save_yaml(yaml, '-job.yml')
+
+    def build_job(self, option):
+        job = {
+            "completions": option.get("completions"),
+            "parallelism": option.get("parallelism"),
+            "activeDeadlineSeconds": option.get("activeDeadlineSeconds"),
+            "backoffLimit": option.get("backoffLimit"),
+            "ttlSecondsAfterFinished": option.get("ttlSecondsAfterFinished"),
             "spec": {
-                "completions": option.get("completions", 1),
-                "parallelism": option.get("parallelism", 1),
-                "activeDeadlineSeconds": option.get("activeDeadlineSeconds", 1),
                 "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template(option.get('nodeSelector'), option.get('tolerations'))
+                "template": self.build_pod_template(option, restartPolicy="Never") # pod启动失败时不会重启，而是通过job-controller重新创建pod供节点调度。
             }
+        }
+        del_dict_none_item(job)
+        return job
+
+    @replace_var_on_params
+    def cronjob(self, option):
+        '''
+        生成定时job
+          参考 https://blog.csdn.net/u012711937/article/details/124478596
+        :params option 部署选项 {successfulJobsHistoryLimit, failedJobsHistoryLimit, startingDeadlineSeconds, nodeSelector}
+                        schedule cron表达式，格式为 Minutes Hours DayofMonth Month DayofWeek Year，即分 小时 日 月 周，其中?与*都是表示给定字段是任意值
+                        startingDeadlineSeconds 过了调度时间n秒后没有启动成功，就不再启动
+                        concurrencyPolicy 并发策略： Allow 允许job并发执行，Forbid只允许当前这个执行，Replace取消当前这个，而执行新的
+                        suspend: 是否挂起，如果设置为true，后续所有执行被挂起
+                        successfulJobsHistoryLimit 保留几个成功的历史记录
+                        failedJobsHistoryLimit 保留几个失败的历史记录
+                        ttlSecondsAfterFinished 任务完成后的n秒后自动删除pod，有该选项，则successfulJobsHistoryLimit和failedJobsHistoryLimit会失效，反正不管成功或失败，到点照样删
+                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        ...其他参数参考 job()
+        '''
+        spec = {
+            "schedule": option["schedule"],
+            "startingDeadlineSeconds": option.get("startingDeadlineSeconds", 300),
+            "concurrencyPolicy": option.get("concurrencyPolicy", "Allow"),
+            "suspend": option.get("suspend", False),
+            "successfulJobsHistoryLimit": option.get("successfulJobsHistoryLimit", 1),
+            "failedJobsHistoryLimit": option.get("failedJobsHistoryLimit", 1),
+            "selector": self.build_selector(option.get("selector")),
+            "jobTemplate": self.build_job(option)
+        }
+        del_dict_none_item(spec)
+        yaml = {
+            "apiVersion": "apps/v1",
+            "kind": "CronJob",
+            "metadata": self.build_metadata(),
+            "spec": spec
         }
         self.save_yaml(yaml, '-job.yml')
 
@@ -556,18 +601,24 @@ class Boot(YamlBoot):
             ret.append(item)
         return ret
 
-    def build_pod_template(self, nodeSelector = None, tolerations = None):
+    def build_pod_template(self, option, restartPolicy = "Always"):
         '''
         构建pod模板
-        :param nodeSelector: 只有deploy才有node过滤器
-        :param tolerations: 只有deploy才有容忍
-        :return:
+        :param option {nodeSelector, tolerations}
+                      nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                      tolerations 容忍
+                      activeDeadlineSeconds 表示 Pod 可以运行的最长时间，达到设置的该值后，Pod 会自动停止。
+        :param restartPolicy 重启策略，默认为Always，对job为Never
+        :return
         '''
         spec = {
+            "activeDeadlineSeconds": option.get('activeDeadlineSeconds'),
             "initContainers": self._init_containers,
             "containers": self._containers,
-            "restartPolicy": "Always",
-            "volumes": list(self._volumes.values())
+            "restartPolicy": restartPolicy,
+            "volumes": list(self._volumes.values()),
+            "nodeSelector": option.get('nodeSelector'),
+            "tolerations": self.build_tolerations(option.get('tolerations')),
         }
         del_dict_none_item(spec)
         ret = {
@@ -576,12 +627,6 @@ class Boot(YamlBoot):
             },
             "spec": spec
         }
-        # 只有deploy才有node过滤器
-        if nodeSelector:
-            ret["spec"]["nodeSelector"] = nodeSelector
-        # 只有deploy才有容忍
-        if tolerations:
-            ret["spec"]["tolerations"] = self.build_tolerations(tolerations)
         return ret
 
     def service(self):
@@ -883,7 +928,7 @@ class Boot(YamlBoot):
         '''
         指定items(downwardAPI挂载的key)
         items的作用是 1指定key挂载到不同名到文件上 2过滤要挂载的key，否则挂载全部key
-        :param: host_path 对应要挂载的key
+        :param: host_path 对应要挂载的key，只接受 labels / annotations
         '''
         # 1 key
         # 没指定key，则挂载所有key
@@ -1118,6 +1163,7 @@ class Boot(YamlBoot):
     def ref_pod_field(self, field):
         '''
         在给环境变量赋时值，注入Pod信息
+          参考 https://blog.csdn.net/skh2015java/article/details/109229107
         :param field Pod信息字段，仅支持 metadata.name, metadata.namespace, metadata.uid, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs
         '''
         return {
@@ -1129,7 +1175,8 @@ class Boot(YamlBoot):
     def ref_resource_field(self, field):
         '''
         在给环境变量赋值时，注入容器资源信息
-        :param field 容器资源信息字段
+          参考 https://blog.csdn.net/skh2015java/article/details/109229107
+        :param field 容器资源信息字段，仅支持 requests.cpu, requests.memory, limits.cpu, limits.memory
         '''
         return {
             "resourceFieldRef": {
@@ -1179,8 +1226,12 @@ class Boot(YamlBoot):
             ret.append(item)
         return ret
 
-    # 构建容器中的环境变量
     def build_env_from(self, env_from):
+        '''
+        构建容器中的环境变量
+           参考 https://blog.csdn.net/u012734723/article/details/122906200
+        :param env_from 仅支持 config / secret
+        '''
         if env_from is None or len(env_from) == 0:
             return None
 
