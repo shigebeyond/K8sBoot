@@ -2,15 +2,15 @@
     - config:
         auther: shigebeyond
         #nginx.conf: ${read_file(./nginx.conf)}
-#    - config_from_files: ./nginx.conf # 单个文件
-#    - config_from_files: ./conf/ # 目录
+    #    - config_from_files: ./nginx.conf # 单个文件
+    #    - config_from_files: ./conf/ # 目录
     - config_from_files: # 文件list
         - ./nginx.conf
         - ./index.html
-#    - config_from_files: # 文件dict，key是配置名，value是文件路径
-#        nginx.conf: ./nginx.conf
+    #    - config_from_files: # 文件dict，key是配置名，value是文件路径
+    #        nginx.conf: ./nginx.conf
 
-#    - secret_files: ./nginx.conf # 与 config_from_files 调用一样
+    #    - secret_files: ./nginx.conf # 与 config_from_files 调用一样
 
     - containers:
         nginx:
@@ -30,7 +30,7 @@
             AUTHOR: ${ref_config(auther)}
           env_from:
             - config
-            - secret
+            #- secret
           ports: # 端口映射
             - 30000:80 # 服务端口:容器端口
             #- 30000:30000:80 # 宿主机端口:服务端口:容器端口
@@ -60,27 +60,47 @@
             memory: 50Mi
 
     # 部署
-     # 简写
-#    - rc: 1
-#    - rs: 1
-#    - ds: 1
-#    - sts: 1
-#    - deploy: 1
+    # 简写
+    #    - rc: 1
+    #    - rs: 1
+    #    - ds: 1
+    #    - sts: 1
+    #    - deploy: 1
 
     # 完整写法
-#    - rc:
-#        replicas: 1
-#    - rs:
-#        replicas: 1
-#    - ds:
-#        replicas: 1
-#    - sts:
-#        replicas: 1
-#    - pod:
+    #    - rc:
+    #        replicas: 1
+    #    - rs:
+    #        replicas: 1
+    #    - ds:
+    #        replicas: 1
+    #    - sts:
+    #        replicas: 1
+    #    - pod:
     - deploy:
         replicas: 1 # 副本数
-        nodeSelector: # 节点选择
-          beta.kubernetes.io/os: linux
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/os: linux
+        nodeAffinity:
+          require: # requiredDuringSchedulingIgnoredDuringExecution简写
+            - kubernetes.io/os in linux # 标签选择的表达式
+          prefer: # preferredDuringSchedulingIgnoredDuringExecution简写
+            - kubernetes.io/os in linux
+          weight: 1
+        podAffinity:
+          require: # requiredDuringSchedulingIgnoredDuringExecution简写
+            - app = nginx
+          prefer: # preferredDuringSchedulingIgnoredDuringExecution简写
+            - app = nginx
+          weight: 1
+          tkey: kubernetes.io/hostname # topologyKey简写
+        podAntiAffinity:
+          require: # requiredDuringSchedulingIgnoredDuringExecution简写
+            - app = xxx
+          prefer: # preferredDuringSchedulingIgnoredDuringExecution简写
+            - app = xxx
+          weight: 1
+          tkey: kubernetes.io/hostname # topologyKey简写
         tolerations: # 容忍
-#          - node-role.kubernetes.io/master:NoSchedule
+          #          - node-role.kubernetes.io/master:NoSchedule
           - node-role.kubernetes.io/control-plane:NoSchedule

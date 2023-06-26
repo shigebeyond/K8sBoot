@@ -319,7 +319,7 @@ class Boot(YamlBoot):
             return {
                 "replicas": 1
             }
-        if isinstance(option, (int, str)):
+        if isinstance(option, (int, float, str)):
             return {
                 "replicas": int(option)
             }
@@ -328,10 +328,12 @@ class Boot(YamlBoot):
         raise Exception(f"动作{action}的参数非字典类型")
 
     @replace_var_on_params
-    def pod(self, _):
+    def pod(self, option):
         '''
         生成pod
         '''
+        if not option:
+            option = {}
         yaml = self.build_pod_template(option)
         yaml.update({
             "apiVersion": "v1",
@@ -387,7 +389,7 @@ class Boot(YamlBoot):
         '''
         生成ds：每个node运行一个pod，因此不需要 replicas 选项
         :params option 部署选项 {nodeSelector}
-                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
         option = self.fix_replicas_option(option, 'ds')
         yaml = {
@@ -408,7 +410,7 @@ class Boot(YamlBoot):
         生成 StatefulSet
         :params option 部署选项 {replicas, nodeSelector}
                         replicas 副本数
-                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
         option = self.fix_replicas_option(option, 'sts')
         yaml = {
@@ -433,7 +435,7 @@ class Boot(YamlBoot):
         生成部署
         :params option 部署选项 {replicas, nodeSelector}
                         replicas 副本数
-                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
         option = self.fix_replicas_option(option, 'deploy')
         yaml = {
@@ -458,7 +460,7 @@ class Boot(YamlBoot):
                         activeDeadlineSeconds 表示 Pod 可以运行的最长时间，达到设置的该值后，Pod 会自动停止，优先于 backoffLimit
                         backoffLimit 最大允许失败的次数
                         ttlSecondsAfterFinished 任务完成后的n秒后自动删除pod
-                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
         '''
         yaml = {
             "apiVersion": "apps/v1",
@@ -496,7 +498,7 @@ class Boot(YamlBoot):
                         successfulJobsHistoryLimit 保留几个成功的历史记录
                         failedJobsHistoryLimit 保留几个失败的历史记录
                         ttlSecondsAfterFinished 任务完成后的n秒后自动删除pod，有该选项，则successfulJobsHistoryLimit和failedJobsHistoryLimit会失效，反正不管成功或失败，到点照样删
-                        nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
                         ...其他参数参考 job()
         '''
         spec = {
@@ -516,7 +518,7 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": spec
         }
-        self.save_yaml(yaml, '-job.yml')
+        self.save_yaml(yaml, '-cronjob.yml')
 
     @replace_var_on_params
     def hpa(self, option):
@@ -616,7 +618,9 @@ class Boot(YamlBoot):
         '''
         构建pod模板
         :param option {nodeSelector, tolerations}
-                      nodeSelector 节点选择，如 "beta.kubernetes.io/os": "linux" 或 "disk": "ssd"
+                      nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
+                      nodeAffinity 节点亲和性，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
+                      podAffinity pod亲和性，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
                       tolerations 容忍
                       activeDeadlineSeconds 表示 Pod 可以运行的最长时间，达到设置的该值后，Pod 会自动停止。
         :param restartPolicy 重启策略，默认为Always，对job为Never
@@ -629,6 +633,7 @@ class Boot(YamlBoot):
             "restartPolicy": restartPolicy,
             "volumes": list(self._volumes.values()),
             "nodeSelector": option.get('nodeSelector'),
+            "affinity": self.build_affinities(option.get('nodeAffinity'), option.get('podAffinity'), option.get('podAntiAffinity')),
             "tolerations": self.build_tolerations(option.get('tolerations')),
         }
         del_dict_none_item(spec)
@@ -737,7 +742,7 @@ class Boot(YamlBoot):
             "image": get_and_del_dict_item(option, 'image'),
             "imagePullPolicy": get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
             "env": self.build_env(get_and_del_dict_item(option, 'env')),
-            "env_from": self.build_env_from(get_and_del_dict_item(option, 'env_from')),
+            "envFrom": self.build_env_from(get_and_del_dict_item(option, 'env_from')),
             "command": self.fix_command(get_and_del_dict_item(option, 'command')),
             "lifecycle": self.build_lifecycle(get_and_del_dict_item(option, 'postStart'), get_and_del_dict_item(option, 'preStop')),
             "ports": self.build_container_ports(get_and_del_dict_item(option, 'ports')),
@@ -765,7 +770,14 @@ class Boot(YamlBoot):
         # 合并标签
         return dict(lbs, **self._labels)
 
-    def build_selector(self, matches):
+    def build_selector(self, matches, for_deploy = True):
+        '''
+        构建 label selector
+        :param matches 标签选择的表达式
+                     dict 类型，走matchLabels，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
+                     list 类型，解析每项表达式，走matchExpressions， 如 - Tier in [backend]，操作符有In/NotIn/Exists/DoesNotExist/Gt/Lt
+        :param for_deploy 是否用于rc/rs/deploy/job级别，否则用于affinity
+        '''
         # dict
         if matches is None or isinstance(matches, dict):
             return {
@@ -779,22 +791,108 @@ class Boot(YamlBoot):
             if '=' in mat: # 相等：走 matchLabels
                 key, val = re.split('\s*=\s*', mat)
                 lables[key] = val
-            else: # 其他: In/NotIn/Exists/DoesNotExist，走 matchExpressions
-                parts = re.split('\s+', mat)
-                key = parts[0]
-                op = parts[1].lower()
-                expr = {
-                    'key': key,
-                    'operator': op.capitalize()
-                }
-                if op == 'in' or op == 'notin':
-                    expr['values'] = parts[3].split(',')
+            else: # 其他: In/NotIn/Exists/DoesNotExist/Gt/Lt，走 matchExpressions
+                expr = self.build_match_exp(mat)
                 exprs.append(expr)
-        ret = {
-            "matchLabels": self.build_labels(lables)
-        }
+        ret = {}
+        if for_deploy: # rc/rs/deploy/job
+            ret["matchLabels"] = self.build_labels(lables) # 带app标签，用于给rc/rs/deploy/job过滤pod
+        elif lables:
+            ret["matchLabels"] = lables
         if exprs:
             ret["matchExpressions"] = exprs
+        return ret
+
+    def build_match_exp(self, mat):
+        '''
+        解析单个matchExpression
+        :param mat 标签选择表达式，如 Tier in [backend]，操作符有In/NotIn/Exists/DoesNotExist/Gt/Lt
+        '''
+        parts = re.split('\s+', mat)
+        key = parts[0]
+        op = parts[1].lower()
+        expr = {
+            'key': key,
+            'operator': op.capitalize()
+        }
+        if op == 'in' or op == 'notin':
+            expr['values'] = parts[2].split(',')
+        if op == 'gt' or op == 'lt':
+            expr['values'] = float(parts[2])
+        return expr
+
+    def build_affinities(self, node_affinity, pod_affinity, pod_anti_affinity):
+        ret = {
+            "nodeAffinity": self.build_node_affinity(node_affinity),
+            "podAffinity": self.build_pod_affinity(pod_affinity),
+            "podAntiAffinity": self.build_pod_affinity(pod_anti_affinity),
+        }
+        del_dict_none_item(ret)
+        return ret or None
+
+    def build_node_affinity(self, option):
+        '''
+        构建节点亲和性
+        :param option {require, prefer, weight}
+                    require Node硬亲和性
+                    prefer Node软亲和性
+                    weight 单个规则的权重，仅用于Node软亲和性
+        '''
+        if not option:
+            return None
+        ret = {}
+        # Node硬亲和性：节点必须满足规则才能调度
+        if 'require' in option:
+            ret["requiredDuringSchedulingIgnoredDuringExecution"] = {
+                "nodeSelectorTerms": [
+                    self.build_selector(option['require'], False)
+                ]
+            }
+
+        # Node软亲和性：节点优先满足规则就调度，不强求
+        if 'prefer' in option:
+            ret["preferredDuringSchedulingIgnoredDuringExecution"] = [
+                {
+                    "preference": self.build_selector(option['prefer'], False),
+                    "weight": option.get('weight', 1)
+                }
+              ]
+
+        return ret
+
+    def build_pod_affinity(self, option):
+        '''
+        构建pod亲和性
+        :param option {require, prefer, weight}
+                    require requiredDuringSchedulingIgnoredDuringExecution简写，pod硬亲和性
+                    prefer preferredDuringSchedulingIgnoredDuringExecution简写，pod软亲和性
+                    weight 单个规则的权重，仅用于pod软亲和性
+                    tkey topologyKey简写，表示节点所属的 topology 范围，可省，默认为 kubernetes.io/hostname
+        '''
+        if not option:
+            return None
+        ret = {}
+        # pod硬亲和性：pod必须满足规则才能调度
+        if 'require' in option:
+            ret["requiredDuringSchedulingIgnoredDuringExecution"] = [
+                {
+                    "labelSelector": self.build_selector(option['require'], False),
+                    "topologyKey": option.get('topologyKey') or option.get('tkey') or 'kubernetes.io/hostname'
+                }
+            ]
+
+        # pod软亲和性：pod优先满足规则就调度，不强求
+        if 'prefer' in option:
+            ret["preferredDuringSchedulingIgnoredDuringExecution"] = [
+                {
+                  "weight": option.get('weight', 1),
+                  "podAffinityTerm": {
+                        "labelSelector": self.build_selector(option['prefer'], False),
+                        "topologyKey": option.get('topologyKey') or option.get('tkey') or 'kubernetes.io/hostname'
+                    }
+                }
+              ]
+
         return ret
 
     def build_lifecycle(self, postStart, preStop):
@@ -990,7 +1088,6 @@ class Boot(YamlBoot):
         if isinstance(keys, str): # 单个key
             keys = [keys]
         return [{'key': key, 'path': key} for key in keys]
-
 
     def build_volume_mounts(self, mounts):
         '''
@@ -1252,19 +1349,19 @@ class Boot(YamlBoot):
             ret.append(item)
         return ret
 
-    def build_env_from(self, env_from):
+    def build_env_from(self, types):
         '''
         构建容器中的环境变量
            参考 https://blog.csdn.net/u012734723/article/details/122906200
-        :param env_from 仅支持 config / secret
+        :param types 仅支持 config / secret
         '''
-        if env_from is None or len(env_from) == 0:
+        if types is None or len(types) == 0:
             return None
 
-        if isinstance(env_from, str):
-            env_from = [env_from]
+        if isinstance(types, str):
+            types = [types]
         ret = []
-        for val in env_from:
+        for val in types:
             if isinstance(val, str):
                 if val == 'config':
                     val = "configMapRef"
