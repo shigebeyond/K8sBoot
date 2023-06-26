@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+from itertools import groupby
 from functools import wraps
 from urllib import parse
 from pyutilb.util import *
@@ -102,12 +103,18 @@ class Boot(YamlBoot):
 
     # 保存yaml
     def save_yaml(self, data, file_postfix):
+        # 转yaml
+        if isinstance(data, list): # 多个资源
+            data = list(map(yaml.dump, data))
+            data = "\n---\n\n".join(data)
+        elif not isinstance(data, str):
+            data = yaml.dump(data)
         # 创建目录
         if not os.path.exists(self._app):
             os.makedirs(self._app)
         # 保存文件
         file = os.path.join(self._app, self._app + file_postfix)
-        write_file(file, yaml.dump(data))
+        write_file(file, data)
 
     def print_apply_cmd(self):
         '''
@@ -308,9 +315,13 @@ class Boot(YamlBoot):
 
     # 修正有副本的选项
     def fix_replicas_option(self, option, action):
+        if not option:
+            return {
+                "replicas": 1
+            }
         if isinstance(option, (int, str)):
             return {
-                "replicas": option
+                "replicas": int(option)
             }
         if isinstance(option, dict):
             return option
@@ -636,8 +647,33 @@ class Boot(YamlBoot):
         '''
         if len(self._ports) == 0:
             return
+        yamls = []
+        type2ports = self.build_service_type2ports()
+        for type, ports in type2ports:
+            yaml = {
+                "apiVersion": "v1",
+                "kind": "Service",
+                "metadata": self.build_metadata('-svc-' + type.lower()),
+                "spec": {
+                    "type": type,
+                    "ports": list(ports),
+                    "selector": self.build_labels()
+                },
+                "status":{
+                    "loadBalancer": {}
+                }
+            }
+            # statefulset 要使用 headless service
+            if self._is_sts and type == 'ClusterIP':
+                yaml["spec"]["clusterIP"] = None # HeadLess service
+            yamls.append(yaml)
+        self.save_yaml(yamls, '-svc.yml')
+
+    def build_service_type2ports(self):
+        '''
+        构建service需要的端口
+        '''
         port_maps = []
-        type = 'ClusterIP'
         for port in self._ports:
             # 解析协议
             protocol = "TCP"
@@ -646,11 +682,11 @@ class Boot(YamlBoot):
                 protocol = protocol.upper()
 
             # 解析1~3个端口
-            parts = list(map(int, port.split(':'))) # 分割+转int
+            parts = list(map(int, port.split(':')))  # 分割+转int
             n = len(parts)
             if n == 3:
-                type = 'NodePort'
                 port_map = {
+                    "type": "NodePort", # 仅用于分组，生成yaml前要删掉
                     "name": "p" + str(parts[2]),
                     "nodePort": parts[0],  # 宿主机端口
                     "port": parts[1],  # 服务端口
@@ -659,6 +695,7 @@ class Boot(YamlBoot):
                 }
             elif n == 2:
                 port_map = {
+                    "type": "ClusterIP", # 仅用于分组，生成yaml前要删掉
                     "name": "p" + str(parts[1]),
                     "port": parts[0],  # 服务端口
                     "targetPort": parts[1],  # 容器端口
@@ -666,31 +703,20 @@ class Boot(YamlBoot):
                 }
             else:
                 port_map = {
+                    "type": "ClusterIP", # 仅用于分组，生成yaml前要删掉
                     "name": "p" + port,
                     "port": port,  # 服务端口
                     "targetPort": port,  # 容器端口
                     "protocol": protocol
                 }
             port_maps.append(port_map)
-        yaml = {
-            "apiVersion": "v1",
-            "kind": "Service",
-            "metadata": self.build_metadata(),
-            "spec": {
-                "type": type,
-                "ports": port_maps,
-                "selector": self.build_labels()
-            },
-            "status":{
-                "loadBalancer": {}
-            }
-        }
-        # statefulset 要使用 headless service
-        if self._is_sts:
-            yaml["spec"]["type"] = 'ClusterIP'
-            yaml["spec"]["clusterIP"] = None # HeadLess service
 
-        self.save_yaml(yaml, '-svc.yml')
+        # 分组
+        def select_type(x):
+            type = x['type']
+            del x['type']
+            return type
+        return groupby(port_maps, key=select_type)
 
     @replace_var_on_params
     def initContainers(self, containers):
@@ -724,9 +750,9 @@ class Boot(YamlBoot):
         del_dict_none_item(ret)
         return ret
 
-    def build_metadata(self):
+    def build_metadata(self, postfix = ''):
         meta = {
-            "name": self._app,
+            "name": self._app + postfix,
             "labels": self.build_labels()
         }
         if self._ns:
