@@ -104,3 +104,5 @@
         tolerations: # 容忍
           #          - node-role.kubernetes.io/master:NoSchedule
           - node-role.kubernetes.io/control-plane:NoSchedule
+    - ingress:
+        http://www.k8s.com/nginx: 80

@@ -60,6 +60,7 @@ class Boot(YamlBoot):
             'sts': self.sts,
             'deploy': self.deploy,
             'hpa': self.hpa,
+            'ingress': self.ingress,
             'initContainers': self.initContainers,
             'containers': self.containers,
         }
@@ -84,6 +85,7 @@ class Boot(YamlBoot):
         self._containers = [] # 记录处理过的容器
         self._volumes = {} # 记录容器中的卷，key是卷名，value是卷信息
         self._ports = [] # 记录容器中的端口映射
+        self._service_type2ports = {} # 记录service类型对端口映射
         self._is_sts = False # 是否用 statefulset 来部署
 
     # 清空app相关的属性
@@ -99,6 +101,7 @@ class Boot(YamlBoot):
         self._containers = []  # 记录处理过的容器
         self._volumes = {}  # 记录容器中的卷，key是卷名，value是卷信息
         self._ports = []  # 记录容器中的端口映射
+        self._service_type2ports = {}  # 记service类型对端口映射
         self._is_sts = False  # 是否用 statefulset 来部署
 
     # 保存yaml
@@ -645,6 +648,54 @@ class Boot(YamlBoot):
         }
         return ret
 
+    @replace_var_on_params
+    def ingress(self, url2port):
+        '''
+        生成 ingress
+        :param url2port: url对容器端口的映射
+        :return:
+        '''
+        rules = [] # ingress转发规则
+        tls_hosts = [] # http协议的主机
+        for url, container_port in url2port.items():
+            url = parse.urlparse(url)
+            rule = {
+                "host": url.netloc,
+                url.scheme: {
+                    "paths": [ # todo: 多个
+                        {
+                            "path": url.path,
+                            "backend": { # 转发给哪个服务
+                                "serviceName": self.get_service_name_by_port(container_port),
+                                "servicePort": container_port
+                            }
+                        },
+                    ]
+                }
+            }
+            rules.append(rule)
+            if url.scheme == 'https':
+                tls_hosts.append(url.netloc)
+
+        if tls_hosts:
+            tls_hosts = [
+                {
+                    "hosts": tls_hosts,
+                    "secretName": self._app + '-tls' # 约定好 tls secret 名字
+                }
+            ]
+
+        yaml = {
+            "apiVersion": "extensions/v1beta1",
+            "kind": "Ingress",
+            "metadata": self.build_metadata(),
+            "spec": {
+                "tls": tls_hosts,
+                "rules": rules
+            }
+        }
+        self.save_yaml(yaml, '-ingress.yml')
+
     def service(self):
         '''
         根据 containers 中的映射路径来生成service
@@ -653,8 +704,7 @@ class Boot(YamlBoot):
         if len(self._ports) == 0:
             return
         yamls = []
-        type2ports = self.build_service_type2ports()
-        for type, ports in type2ports:
+        for type, ports in self.build_service_type2ports():
             yaml = {
                 "apiVersion": "v1",
                 "kind": "Service",
@@ -674,46 +724,21 @@ class Boot(YamlBoot):
             yamls.append(yaml)
         self.save_yaml(yamls, '-svc.yml')
 
+    def get_service_name_by_port(self, container_port):
+        for port in self._ports:
+            port_map = self.build_service_port(port)
+            if port_map["targetPort"] == container_port:
+                return self._app + '-svc-' + port_map["type"].lower()
+
+        raise Exception(f"找不到端口[{container_port}]对应的服务类型")
+
     def build_service_type2ports(self):
         '''
         构建service需要的端口
         '''
         port_maps = []
         for port in self._ports:
-            # 解析协议
-            protocol = "TCP"
-            if "://" in port:
-                protocol, port = port.split("://", 1)
-                protocol = protocol.upper()
-
-            # 解析1~3个端口
-            parts = list(map(int, port.split(':')))  # 分割+转int
-            n = len(parts)
-            if n == 3:
-                port_map = {
-                    "type": "NodePort", # 仅用于分组，生成yaml前要删掉
-                    "name": "p" + str(parts[2]),
-                    "nodePort": parts[0],  # 宿主机端口
-                    "port": parts[1],  # 服务端口
-                    "targetPort": parts[2],  # 容器端口
-                    "protocol": protocol
-                }
-            elif n == 2:
-                port_map = {
-                    "type": "ClusterIP", # 仅用于分组，生成yaml前要删掉
-                    "name": "p" + str(parts[1]),
-                    "port": parts[0],  # 服务端口
-                    "targetPort": parts[1],  # 容器端口
-                    "protocol": protocol
-                }
-            else:
-                port_map = {
-                    "type": "ClusterIP", # 仅用于分组，生成yaml前要删掉
-                    "name": "p" + port,
-                    "port": port,  # 服务端口
-                    "targetPort": port,  # 容器端口
-                    "protocol": protocol
-                }
+            port_map = self.build_service_port(port)
             port_maps.append(port_map)
 
         # 分组
@@ -721,7 +746,44 @@ class Boot(YamlBoot):
             type = x['type']
             del x['type']
             return type
-        return groupby(port_maps, key=select_type)
+        self._service_type2ports = groupby(port_maps, key=select_type)
+        return self._service_type2ports
+
+    def build_service_port(self, port):
+        # 解析协议
+        protocol = "TCP"
+        if "://" in port:
+            protocol, port = port.split("://", 1)
+            protocol = protocol.upper()
+        # 解析1~3个端口
+        parts = list(map(int, port.split(':')))  # 分割+转int
+        n = len(parts)
+        if n == 3:
+            return {
+                "type": "NodePort",  # 仅用于分组，生成yaml前要删掉
+                "name": "p" + str(parts[2]),
+                "nodePort": parts[0],  # 宿主机端口
+                "port": parts[1],  # 服务端口
+                "targetPort": parts[2],  # 容器端口
+                "protocol": protocol
+            }
+
+        if n == 2:
+            return {
+                "type": "ClusterIP",  # 仅用于分组，生成yaml前要删掉
+                "name": "p" + str(parts[1]),
+                "port": parts[0],  # 服务端口
+                "targetPort": parts[1],  # 容器端口
+                "protocol": protocol
+            }
+
+        return {
+            "type": "ClusterIP",  # 仅用于分组，生成yaml前要删掉
+            "name": "p" + port,
+            "port": port,  # 服务端口
+            "targetPort": port,  # 容器端口
+            "protocol": protocol
+        }
 
     @replace_var_on_params
     def initContainers(self, containers):
