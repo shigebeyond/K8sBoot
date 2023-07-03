@@ -640,6 +640,11 @@ class Boot(YamlBoot):
             "tolerations": self.build_tolerations(option.get('tolerations')),
         }
         del_dict_none_item(spec)
+        # 处理hostNetwork，要加上dnsPolicy
+        host_network = option.get('hostNetwork', False)
+        if host_network:
+            spec["hostNetwork"] = host_network
+            spec["dnsPolicy"] = option.get("dnsPolicy", "ClusterFirstWithHostNet") # 使用k8s DNS内部域名解析，如果不加，pod默认使用所在宿主主机使用的DNS，这样会导致容器内不能通过service name访问k8s集群中其他POD
         ret = {
             "metadata": {
                 "labels": self.build_labels()
@@ -648,34 +653,63 @@ class Boot(YamlBoot):
         }
         return ret
 
+    # 修正字典树的路径
+    def fix_trie_paths(self, trie, path='', ret={}):
+        # 遍历字典树的每个键
+        for key, value in trie.items():
+            # 构建当前节点的路径
+            current_path = path + key
+            if isinstance(value, dict): # 如果当前节点仍然是字典类型，则进行递归
+                self.fix_trie_paths(value, current_path, ret)
+            else: # 如果当前节点是叶子节点，则将完整路径添加到结果列表中
+                ret[current_path] = value
+        return ret
+
     @replace_var_on_params
     def ingress(self, url2port):
         '''
         生成 ingress
-        :param url2port: url对容器端口的映射
+        :param url2port: url对容器端口的映射，dict类型，支持字典树形式
         :return:
         '''
+        # 修正字典树的路径
+        url2port = self.fix_trie_paths(url2port)
+        # 按域名分组
+        def select_scheme_host(url):
+            url = parse.urlparse(url)
+            return url.scheme + ':' + url.netloc
+        host2urls = groupby(url2port.keys(), key=select_scheme_host)
+
+        # 两层遍历：1 域名 2 url
         rules = [] # ingress转发规则
         tls_hosts = [] # http协议的主机
-        for url, container_port in url2port.items():
-            url = parse.urlparse(url)
+        # 遍历域名分组
+        for scheme_host, urls in host2urls:
+            # 遍历某域名下的url，生成转发规则
+            paths = []
+            for url, container_port in url2port.items():
+                container_port = url2port[url]
+                url = parse.urlparse(url)
+                path = {
+                    "path": url.path,
+                    "backend": {  # 转发给哪个服务
+                        "serviceName": self.get_service_name_by_port(container_port),
+                        "servicePort": container_port
+                    }
+                }
+                paths.append(path)
+            # 生成该域名的规则
+            scheme, host = scheme_host.split(':')
             rule = {
-                "host": url.netloc,
-                url.scheme: {
-                    "paths": [ # todo: 多个
-                        {
-                            "path": url.path,
-                            "backend": { # 转发给哪个服务
-                                "serviceName": self.get_service_name_by_port(container_port),
-                                "servicePort": container_port
-                            }
-                        },
-                    ]
+                "host": host,
+                scheme: {
+                    "paths": paths
                 }
             }
             rules.append(rule)
-            if url.scheme == 'https':
-                tls_hosts.append(url.netloc)
+            # 记录https的域名
+            if scheme == 'https':
+                tls_hosts.append(host)
 
         if tls_hosts:
             tls_hosts = [
@@ -686,7 +720,7 @@ class Boot(YamlBoot):
             ]
 
         yaml = {
-            "apiVersion": "extensions/v1beta1",
+            "apiVersion": "networking.k8s.io/v1",
             "kind": "Ingress",
             "metadata": self.build_metadata(),
             "spec": {
@@ -741,7 +775,7 @@ class Boot(YamlBoot):
             port_map = self.build_service_port(port)
             port_maps.append(port_map)
 
-        # 分组
+        # 按类型分组
         def select_type(x):
             type = x['type']
             del x['type']
