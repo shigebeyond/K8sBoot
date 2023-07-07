@@ -2,15 +2,15 @@
     - config:
         auther: shigebeyond
         #nginx.conf: ${read_file(./nginx.conf)}
-    #    - config_from_files: ./nginx.conf # 单个文件
-    #    - config_from_files: ./conf/ # 目录
+#    - config_from_files: ./nginx.conf # 单个文件
+#    - config_from_files: ./conf/ # 目录
     - config_from_files: # 文件list
         - ./nginx.conf
         - ./index.html
-    #    - config_from_files: # 文件dict，key是配置名，value是文件路径
-    #        nginx.conf: ./nginx.conf
+#    - config_from_files: # 文件dict，key是配置名，value是文件路径
+#        nginx.conf: ./nginx.conf
 
-    #    - secret_files: ./nginx.conf # 与 config_from_files 调用一样
+#    - secret_files: ./nginx.conf # 与 config_from_files 调用一样
 
     - containers:
         nginx:
@@ -32,7 +32,8 @@
             - config
             #- secret
           ports: # 端口映射
-            - 30000:80 # 服务端口:容器端口
+            - 80 # 容器端口
+            #- 30000:80 # 服务端口:容器端口
             #- 30000:30000:80 # 宿主机端口:服务端口:容器端口
             #- udp://30000:80 # 前面加协议，默认tcp
           volumes: # 卷映射
@@ -61,22 +62,22 @@
 
     # 部署
     # 简写
-    #    - rc: 1
-    #    - rs: 1
-    #    - ds: 1
-    #    - sts: 1
-    #    - deploy: 1
+#    - rc: 1
+#    - rs: 1
+#    - ds: 1
+#    - sts: 1
+#    - deploy: 1
 
     # 完整写法
-    #    - rc:
-    #        replicas: 1
-    #    - rs:
-    #        replicas: 1
-    #    - ds:
-    #        replicas: 1
-    #    - sts:
-    #        replicas: 1
-    #    - pod:
+#    - rc:
+#        replicas: 1
+#    - rs:
+#        replicas: 1
+#    - ds:
+#        replicas: 1
+#    - sts:
+#        replicas: 1
+#    - pod:
     - deploy:
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
@@ -105,8 +106,9 @@
           #          - node-role.kubernetes.io/master:NoSchedule
           - node-role.kubernetes.io/control-plane:NoSchedule
     - ingress:
-        # url对转发的端口映射，支持字典树形式
+        # url对转发的(服务)端口映射，支持字典树形式
         http://www.k8s.com/a: 80
         http://www.k8s.com:
           /b: 80
           /c: 80
+        http://www.k8s.com/api(/|$)(.*): 80  # 路径重写，如果是/api/hello，则去掉前缀api，访问服务的/hello，网关一般这么搞

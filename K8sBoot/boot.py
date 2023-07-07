@@ -683,6 +683,7 @@ class Boot(YamlBoot):
         # 两层遍历：1 域名 2 url
         rules = [] # ingress转发规则
         tls_hosts = [] # http协议的主机
+        rewrite = False # 是否重写路径
         # 遍历域名分组
         for scheme_host, urls in host2urls:
             # 遍历某域名下的url，生成转发规则
@@ -690,11 +691,18 @@ class Boot(YamlBoot):
             for url, container_port in url2port.items():
                 container_port = url2port[url]
                 url = parse.urlparse(url)
+                if '(' in url.path: # 有重写路径，如 http://www.k8s.com/api(/|$)(.*)
+                    rewrite = True
                 path = {
+                    "pathType": "Prefix",
                     "path": url.path,
-                    "backend": {  # 转发给哪个服务
-                        "serviceName": self.get_service_name_by_port(container_port),
-                        "servicePort": container_port
+                    "backend": {
+                        "service": {  # 转发给哪个服务
+                            "name": self.get_service_name_by_port(container_port),
+                            "port": {
+                                "number": container_port
+                            }
+                        }
                     }
                 }
                 paths.append(path)
@@ -719,11 +727,19 @@ class Boot(YamlBoot):
                 }
             ]
 
+        # 重写注解
+        anns = None
+        if rewrite:
+            anns = {
+                'nginx.ingress.kubernetes.io/rewrite-target': '/$2'
+            }
+
         yaml = {
             "apiVersion": "networking.k8s.io/v1",
             "kind": "Ingress",
-            "metadata": self.build_metadata(),
+            "metadata": self.build_metadata(anns = anns),
             "spec": {
+                "ingressClassName": "nginx",
                 "tls": tls_hosts,
                 "rules": rules
             }
@@ -773,6 +789,7 @@ class Boot(YamlBoot):
         port_maps = []
         for port in self._ports:
             port_map = self.build_service_port(port)
+            del_dict_none_item(port_map)
             port_maps.append(port_map)
 
         # 按类型分组
@@ -784,11 +801,19 @@ class Boot(YamlBoot):
         return self._service_type2ports
 
     def build_service_port(self, port):
+        if isinstance(port, int):
+            port = str(port)
+
         # 解析协议
         protocol = "TCP"
+        appProtocol = None
         if "://" in port:
             protocol, port = port.split("://", 1)
             protocol = protocol.upper()
+            if protocol.startswith('HTTP'): # http协议
+                appProtocol = protocol
+                protocol = "TCP"
+
         # 解析1~3个端口
         parts = list(map(int, port.split(':')))  # 分割+转int
         n = len(parts)
@@ -799,7 +824,8 @@ class Boot(YamlBoot):
                 "nodePort": parts[0],  # 宿主机端口
                 "port": parts[1],  # 服务端口
                 "targetPort": parts[2],  # 容器端口
-                "protocol": protocol
+                "protocol": protocol,
+                "appProtocol": appProtocol
             }
 
         if n == 2:
@@ -808,15 +834,17 @@ class Boot(YamlBoot):
                 "name": "p" + str(parts[1]),
                 "port": parts[0],  # 服务端口
                 "targetPort": parts[1],  # 容器端口
-                "protocol": protocol
+                "protocol": protocol,
+                "appProtocol": appProtocol
             }
 
         return {
             "type": "ClusterIP",  # 仅用于分组，生成yaml前要删掉
             "name": "p" + port,
-            "port": port,  # 服务端口
-            "targetPort": port,  # 容器端口
-            "protocol": protocol
+            "port": int(port),  # 服务端口
+            "targetPort": int(port),  # 容器端口
+            "protocol": protocol,
+            "appProtocol": appProtocol
         }
 
     @replace_var_on_params
@@ -851,13 +879,15 @@ class Boot(YamlBoot):
         del_dict_none_item(ret)
         return ret
 
-    def build_metadata(self, postfix = ''):
+    def build_metadata(self, postfix='', anns=None):
         meta = {
             "name": self._app + postfix,
             "labels": self.build_labels()
         }
         if self._ns:
             meta['namespace'] = self._ns
+        if anns:
+            meta['annotations'] = anns
         return meta
 
     def build_labels(self, lbs = None):
@@ -1029,7 +1059,8 @@ class Boot(YamlBoot):
         # 解析容器端口
         container_ports = []
         for port in ports:
-            port = port.rsplit(':', 1)[-1]
+            if isinstance(port, str) and ':' in port:
+                port = port.rsplit(':', 1)[-1]
             container_ports.append({
                 "containerPort": int(port)
             })
