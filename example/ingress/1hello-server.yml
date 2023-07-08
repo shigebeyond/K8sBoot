@@ -1,0 +1,10 @@
+- app(hello-server):
+    - containers:
+        hello-server:
+          image: registry.cn-hangzhou.aliyuncs.com/lfy_k8s_images/hello-server
+          ports: # 端口映射
+            - 8000:9000 # 服务端口:容器端口
+    # 部署
+    - deploy:
+        replicas: 2 # 副本数
+

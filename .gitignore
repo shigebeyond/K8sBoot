@@ -11,4 +11,3 @@ boot.log*
 stat.yml
 data/
 tmp/
-/example/nginx/
