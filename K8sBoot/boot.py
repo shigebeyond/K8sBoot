@@ -40,8 +40,9 @@ class Boot(YamlBoot):
         'deploy': 'Deployment',
     }
 
-    def __init__(self):
+    def __init__(self, output_dir):
         super().__init__()
+        self.output_dir = output_dir or '.'
         # step_dir作为当前目录
         self.step_dir_as_cwd = True
         # 动作映射函数
@@ -113,10 +114,11 @@ class Boot(YamlBoot):
         elif not isinstance(data, str):
             data = yaml.dump(data)
         # 创建目录
-        if not os.path.exists(self._app):
-            os.makedirs(self._app)
+        root = os.path.join(self.output_dir, self._app)
+        if not os.path.exists(root):
+            os.makedirs(root)
         # 保存文件
-        file = os.path.join(self._app, self._app + file_postfix)
+        file = os.path.join(root, self._app + file_postfix)
         write_file(file, data)
 
     def print_apply_cmd(self):
@@ -1504,8 +1506,6 @@ class Boot(YamlBoot):
 
 # cli入口
 def main():
-    # 基于yaml的执行器
-    boot = Boot()
     # 读元数据：author/version/description
     dir = os.path.dirname(__file__)
     meta = read_init_file_meta(dir + os.sep + '__init__.py')
@@ -1513,6 +1513,8 @@ def main():
     step_files, option = parse_cmd('K8sBoot', meta['version'])
     if len(step_files) == 0:
         raise Exception("Miss step config file or directory")
+    # 基于yaml的执行器
+    boot = Boot(option.output)
     try:
         # 执行yaml配置的步骤
         boot.run(step_files)
