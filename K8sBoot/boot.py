@@ -42,7 +42,7 @@ class Boot(YamlBoot):
 
     def __init__(self, output_dir):
         super().__init__()
-        self.output_dir = output_dir or '.'
+        self.output_dir = output_dir or 'out'
         # step_dir作为当前目录
         self.step_dir_as_cwd = True
         # 动作映射函数
@@ -76,6 +76,9 @@ class Boot(YamlBoot):
         custom_funs.update(funcs)
 
         self._ns = '' # 命名空间
+        self.app2ports = {} # 记录每个app的容器端口映射，不会清空
+
+        # app作用域的属性，跳出app时就清空
         self._app = '' # 应用名
         self._labels = {}  # 记录标签
         self._config_data = {} # 记录设置过的配置
@@ -85,7 +88,6 @@ class Boot(YamlBoot):
         self._init_containers = None # 记录处理过的初始容器
         self._containers = [] # 记录处理过的容器
         self._volumes = {} # 记录容器中的卷，key是卷名，value是卷信息
-        self._ports = [] # 记录容器中的端口映射
         self._service_type2ports = {} # 记录service类型对端口映射
         self._is_sts = False # 是否用 statefulset 来部署
 
@@ -101,9 +103,18 @@ class Boot(YamlBoot):
         self._init_containers = None  # 记录处理过的初始容器
         self._containers = []  # 记录处理过的容器
         self._volumes = {}  # 记录容器中的卷，key是卷名，value是卷信息
-        self._ports = []  # 记录容器中的端口映射
         self._service_type2ports = {}  # 记service类型对端口映射
         self._is_sts = False  # 是否用 statefulset 来部署
+
+    # 获得指定app的端口映射
+    def app_ports(self, app = None):
+        if not app:
+            app = self._app
+        if not app:
+            raise Exception('未指定app')
+        if app not in self.app2ports:
+            self.app2ports[app] = []
+        return self.app2ports[app]
 
     # 保存yaml
     def save_yaml(self, data, file_postfix):
@@ -114,11 +125,10 @@ class Boot(YamlBoot):
         elif not isinstance(data, str):
             data = yaml.dump(data)
         # 创建目录
-        root = os.path.join(self.output_dir, self._app)
-        if not os.path.exists(root):
-            os.makedirs(root)
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
         # 保存文件
-        file = os.path.join(root, self._app + file_postfix)
+        file = os.path.join(self.output_dir, self._app + file_postfix)
         write_file(file, data)
 
     def print_apply_cmd(self):
@@ -671,7 +681,7 @@ class Boot(YamlBoot):
     def ingress(self, url2port):
         '''
         生成 ingress
-        :param url2port: url对容器端口的映射，dict类型，支持字典树形式
+        :param url2port: url对服务端口的映射，dict类型，支持字典树形式
         :return:
         '''
         # 修正字典树的路径
@@ -690,19 +700,27 @@ class Boot(YamlBoot):
         for scheme_host, urls in host2urls:
             # 遍历某域名下的url，生成转发规则
             paths = []
-            for url, container_port in url2port.items():
-                container_port = url2port[url]
+            for url, service_port in url2port.items():
                 url = parse.urlparse(url)
-                if '(' in url.path: # 有重写路径，如 http://www.k8s.com/api(/|$)(.*)
+                # 检查有重写路径，如 http://www.k8s.com/api(/|$)(.*)
+                if '(' in url.path:
                     rewrite = True
+                # 获得转发的应用名
+                if isinstance(service_port, str) and ':' in service_port: # 有指定应用名
+                    app, service_port = service_port.split(':')
+                    service_port = int(service_port)
+                else: # 无指定应用名，则为当前应用
+                    app = self._app
+                # 获得转发的服务名
+                service_name = self.get_service_name_by_port(service_port, app)
                 path = {
                     "pathType": "Prefix",
                     "path": url.path,
                     "backend": {
                         "service": {  # 转发给哪个服务
-                            "name": self.get_service_name_by_port(container_port),
+                            "name": service_name,
                             "port": {
-                                "number": container_port
+                                "number": service_port
                             }
                         }
                     }
@@ -753,7 +771,7 @@ class Boot(YamlBoot):
         根据 containers 中的映射路径来生成service
            映射路径如： 宿主机端口:服务端口:容器端口
         '''
-        if len(self._ports) == 0:
+        if len(self.app_ports()) == 0:
             return
         yamls = []
         for type, ports in self.build_service_type2ports():
@@ -776,20 +794,20 @@ class Boot(YamlBoot):
             yamls.append(yaml)
         self.save_yaml(yamls, '-svc.yml')
 
-    def get_service_name_by_port(self, container_port):
-        for port in self._ports:
+    def get_service_name_by_port(self, service_port, app):
+        for port in self.app_ports(app):
             port_map = self.build_service_port(port)
-            if port_map["targetPort"] == container_port:
-                return self._app + '-svc-' + port_map["type"].lower()
+            if port_map["port"] == service_port:
+                return app + '-svc-' + port_map["type"].lower()
 
-        raise Exception(f"找不到端口[{container_port}]对应的服务类型")
+        raise Exception(f"找不到端口[{service_port}]对应的服务类型")
 
     def build_service_type2ports(self):
         '''
         构建service需要的端口
         '''
         port_maps = []
-        for port in self._ports:
+        for port in self.app_ports():
             port_map = self.build_service_port(port)
             del_dict_none_item(port_map)
             port_maps.append(port_map)
@@ -1057,7 +1075,7 @@ class Boot(YamlBoot):
         if isinstance(ports, str):
             ports = [ports]
         # 记录每个容器的端口映射
-        self._ports.extend(ports)
+        self.app_ports().extend(ports)
         # 解析容器端口
         container_ports = []
         for port in ports:
