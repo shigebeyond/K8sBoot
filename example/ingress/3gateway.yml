@@ -4,5 +4,3 @@
         http://k8s.com:
             /hello: hello:8000 # 指定应用的服务端口
             /demo: demo:8001
-            /backend: backend:8002
-

@@ -19,7 +19,7 @@
             - 9000 # 容器端口
           volumes: # 卷映射
             #- /apps/www:/var/www
-            - config://index.php:/www/index.php
+            - config://index.php:/www/index.php # 必须的，否则响应报 file not found
     # 部署
     - deploy:
         replicas: 2 # 副本数
