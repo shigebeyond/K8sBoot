@@ -4,7 +4,7 @@
         auther: shigebeyond
     - containers:
         nginx-hpa:
-          image: nginx
+          image: nginx:1.20.0
           ports: # 端口映射
             - 80:80 # 服务端口:容器端口
           resources:

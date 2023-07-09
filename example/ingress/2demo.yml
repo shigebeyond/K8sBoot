@@ -1,0 +1,10 @@
+- app(demo):
+    - containers:
+        demo:
+          image: nginxdemos/hello:plain-text
+          ports: # 端口映射
+            - 8001:80 # 服务端口:容器端口
+    # 部署
+    - deploy:
+        replicas: 2 # 副本数
+

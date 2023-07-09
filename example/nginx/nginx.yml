@@ -38,12 +38,15 @@
             #- udp://30000:80 # 前面加协议，默认tcp
           volumes: # 卷映射
             - /var/log/nginx
-            - /lnmp/www:/www
+            #- /lnmp/www:/www
             # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
-            - config://:/usr/share/nginx/html # 挂载configmap所有key到目录
+            - config://:/www # 挂载configmap所有key到目录
             - config://nginx.conf:/etc/nginx/nginx.conf # 挂载configmap单个key到文件
             - downwardAPI://:/etc/podinfo # 将元数据labels和annotations以文件的形式挂载到目录
             - downwardAPI://labels:/etc/podinfo2/labels.properties # 将元数据labels挂载为文件
+          # 命令改写后导致nginx自身服务没起来，应该是覆盖了nginx镜像自身的启动命令
+          #command: sed -i 's/POD_IP/\$POD_IP/g' /www/index.html; tail -f /etc/profile
+          #command: while true;do echo hello;sleep 1;done # 死循环维持pod运行
           ready?: # 就绪态
             # 各种秒数
             #seconds: initialDelaySeconds=5 periodSeconds=5 timeoutSeconds=5 successThreshold=1 failureThreshold=5 # 全写
@@ -79,7 +82,7 @@
 #        replicas: 1
 #    - pod:
     - deploy:
-        replicas: 1 # 副本数
+        replicas: 2 # 副本数
         nodeSelector: # 节点选择: dict形式
           kubernetes.io/os: linux
         nodeAffinity:
@@ -107,9 +110,9 @@
           - node-role.kubernetes.io/control-plane:NoSchedule
     - ingress:
         # url对转发的(服务)端口映射，支持字典树形式
-        http://www.k8s.com/a: 80 # 当前应用的服务端口
-        http://www.k8s.com/b: nginx:80 # 指定应用的服务端口
-        http://www.k8s.com:
+        http://k8s.com/a: 80 # 当前应用的服务端口
+        http://k8s.com/b: nginx:80 # 指定应用的服务端口
+        http://k8s.com:
           /c: 80 # 当前应用的服务端口
           /d: nginx:80 # 指定应用的服务端口
-        http://www.k8s.com/api(/|$)(.*): 80  # 路径重写，如果是/api/hello，则去掉前缀api，访问服务的/hello，网关一般这么搞
+        http://k8s.com/api(/|$)(.*): 80  # 路径重写，如果是/api/hello，则去掉前缀api，访问服务的/hello，网关一般这么搞

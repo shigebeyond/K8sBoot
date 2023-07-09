@@ -778,7 +778,7 @@ class Boot(YamlBoot):
             yaml = {
                 "apiVersion": "v1",
                 "kind": "Service",
-                "metadata": self.build_metadata('-svc-' + type.lower()),
+                "metadata": self.build_metadata(self.build_service_name(type)),
                 "spec": {
                     "type": type,
                     "ports": list(ports),
@@ -794,11 +794,24 @@ class Boot(YamlBoot):
             yamls.append(yaml)
         self.save_yaml(yamls, '-svc.yml')
 
+    # 服务类型的简写映射
+    service_type_short_map = {
+        'ClusterIP': 'vip',
+        'NodePort': 'np',
+    }
+
+    # 构建服务名
+    def build_service_name(self, type, app = None):
+        if app is None: # 无需app名，用来获得服务名后缀
+            app = ''
+        return app + '-svc-' + self.service_type_short_map[type]
+
+    # 通过服务端口来获得服务名
     def get_service_name_by_port(self, service_port, app):
         for port in self.app_ports(app):
             port_map = self.build_service_port(port)
             if port_map["port"] == service_port:
-                return app + '-svc-' + port_map["type"].lower()
+                return self.build_service_name(port_map["type"], app)
 
         raise Exception(f"找不到端口[{service_port}]对应的服务类型")
 

@@ -1,0 +1,10 @@
+- app(backend):
+    - containers:
+        backend:
+          image: registry.cn-hangzhou.aliyuncs.com/google_containers/defaultbackend:1.4
+          ports: # 端口映射
+            - 8002:8080 # 服务端口:容器端口
+    # 部署
+    - deploy:
+        replicas: 2 # 副本数
+
