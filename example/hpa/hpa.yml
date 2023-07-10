@@ -1,9 +1,9 @@
 # https://kubernetes.io/zh-cn/docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/
-- app(php-apache):
+- app(php-hpa):
     - config:
         auther: shigebeyond
     - containers:
-        php-apache:
+        php-hpa:
           image: registry.k8s.io/hpa-example
           ports: # 端口映射
             - 80:80 # 服务端口:容器端口

@@ -1,6 +1,6 @@
 - app(gateway):
     - ingress:
         # url对转发的(服务)端口映射，支持字典树形式
-        http://k8s.com:
+        k8s.com:
             /hello: hello:8000 # 指定应用的服务端口
             /demo: demo:8001

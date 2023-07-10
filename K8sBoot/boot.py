@@ -42,7 +42,7 @@ class Boot(YamlBoot):
 
     def __init__(self, output_dir):
         super().__init__()
-        self.output_dir = output_dir or 'out'
+        self.output_dir = os.path.abspath(output_dir or 'out')
         # step_dir作为当前目录
         self.step_dir_as_cwd = True
         # 不需要输出统计结果到stat.yml
@@ -62,6 +62,8 @@ class Boot(YamlBoot):
             'ds': self.ds,
             'sts': self.sts,
             'deploy': self.deploy,
+            'job': self.job,
+            'cronjob': self.cronjob,
             'hpa': self.hpa,
             'ingress': self.ingress,
             'initContainers': self.initContainers,
@@ -137,8 +139,7 @@ class Boot(YamlBoot):
         '''
         打印 kubectl apply 命令
         '''
-        dir = os.path.abspath(self._app)
-        cmd = f'App[{self._app}]的资源配置文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl apply --record=true -f {dir}'
+        cmd = f'App[{self._app}]的资源配置文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl apply --record=true -f {self.output_dir}'
         log.info(cmd)
 
     # --------- 动作处理的函数 --------
@@ -190,7 +191,7 @@ class Boot(YamlBoot):
 
     def app(self, steps, name=None):
         '''
-        处理应用
+        声明应用，并执行子步骤
         :param steps 子步骤
         name 应用名
         '''
@@ -295,7 +296,7 @@ class Boot(YamlBoot):
     @replace_var_on_params
     def secret(self, data):
         '''
-        生成密钥， 其实跟config差不多，只不过config是明文，secret是密文
+        生成secret， 其实跟config差不多，只不过config是明文，secret是密文
         :param data 密钥项，可以是键值对，可以包含变量，如
               name: shigebeyond
               default.conf: ${read_file(./default.conf)}
@@ -308,8 +309,8 @@ class Boot(YamlBoot):
     @replace_var_on_params
     def secret_files(self, files):
         '''
-        以文件内容的方式来设置配置，在挂载secret时items默认填充用secret_files()写入的key
-        :param files 配置文件list或dict或目录
+        以文件内容的方式来设置secret，在挂载secret时items默认填充用secret_files()写入的key
+        :param files secret文件list或dict或目录
                   dict类型： key是配置项名，value是文件路径，如 default.conf: ./default.conf
                   list类型： 元素是文件路径，会用文件名作为key
                   str类型： 目录/文件路径
@@ -676,6 +677,8 @@ class Boot(YamlBoot):
             if isinstance(value, dict): # 如果当前节点仍然是字典类型，则进行递归
                 self.fix_trie_paths(value, current_path, ret)
             else: # 如果当前节点是叶子节点，则将完整路径添加到结果列表中
+                if not parse.urlparse(current_path).scheme: # 默认协议是http
+                    current_path = 'http://' + current_path
                 ret[current_path] = value
         return ret
 
