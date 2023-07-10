@@ -14,7 +14,7 @@ k8s太复杂了，特别是命令与配置，学习与使用成本很高，大�
 ## 特性
 1. 支持通过yaml来配置执行的步骤，简化了生成代码的开发:
 每个步骤可以有多个动作，但单个步骤中动作名不能相同（yaml语法要求）;
-动作代表excel上的一种操作，如switch_sheet/export_df等等;
+动作代表k8s的某个资源配置或生成，如config/rc/rs/deploy等等;
 2. 支持类似python`for`/`if`/`break`语义的步骤动作，灵活适应各种场景
 3. 支持`include`引用其他的yaml配置文件，以便解耦与复用
 
@@ -78,14 +78,14 @@ data
 
 顶级的元素是步骤;
 
-每个步骤里有多个动作(如switch_sheet/export_df)，如果动作有重名，就另外新开一个步骤写动作，这是由yaml语法限制导致的，但不影响步骤执行。
+每个步骤里有多个动作(如config/rc/rs/deploy)，如果动作有重名，就另外新开一个步骤写动作，这是由yaml语法限制导致的，但不影响步骤执行。
 
 ## 配置详解
 支持通过yaml来配置执行的步骤;
 
 每个步骤可以有多个动作，但单个步骤中动作名不能相同（yaml语法要求）;
 
-动作代表k8s上的一种操作，如switch_sheet/export_df等等;
+动作代表k8s上的一种操作，如config/rc/rs/deploy等等;
 
 下面详细介绍每个动作
 
@@ -128,19 +128,19 @@ for动作下包含一系列子步骤，表示循环执行这系列子步骤；�
 # 循环3次
 for(3) :
   # 每次迭代要执行的子步骤
-  - switch_sheet: test
+  - print: $for_v
 
 # 循环list类型的变量urls
 for(urls) :
   # 每次迭代要执行的子步骤
-  - switch_sheet: test
+  - print: $for_v
 
 # 无限循环，直到遇到跳出动作
 # 有变量for_i记录是第几次迭代（从1开始）
 for:
   # 每次迭代要执行的子步骤
   - break_if: for_i>2 # 满足条件则跳出循环
-    switch_sheet: test
+    print: $for_v
 ```
 
 7. once: 只执行一次，等价于 `for(1)`; 
@@ -149,7 +149,7 @@ once 结合 moveon_if，可以模拟 python 的 `if` 语法效果
 once:
   # 每次迭代要执行的子步骤
   - moveon_if: for_i<=2 # 满足条件则往下走，否则跳出循环
-    switch_sheet: test
+    print: $for_v
 ```
 
 8. break_if: 满足条件则跳出循环; 
@@ -269,7 +269,7 @@ containers:
 
 18. initContainers：设置初始化容器，用于生成资源 pod / ReplicationController / ReplicaSet / DaemonSet / StatefulSet / Deployment / Job / Cronjob / HorizontalPodAutoscaler 文件中的 `spec.initContainers` 元素
 ```yaml
-initContainers：
+initContainers: 
 	# 参数跟 containers 动作一样
 ```
 
@@ -384,8 +384,10 @@ ingress:
     # url对转发的(服务)端口映射，支持字典树形式
     http://k8s.com/a: 80 # 当前应用的服务端口
     http://k8s.com/b: nginx:80 # 指定应用的服务端口
+    # 等价于
     http://k8s.com:
       /c: 80 # 当前应用的服务端口
       /d: nginx:80 # 指定应用的服务端口
-    http://k8s.com/api(/|$)(.*): 80  # 路径重写，如果是/api/hello，则去掉前缀api，访问服务的/hello，网关一般这么搞
+    # 路径重写，如果是/api/hello，则去掉前缀api，访问服务的/hello，网关一般这么搞
+    http://k8s.com/api(/|$)(.*): 80  
 ```
