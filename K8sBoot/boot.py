@@ -224,7 +224,7 @@ class Boot(YamlBoot):
         以键值对的方式来设置配置
         :param data 配置项，可以是键值对，可以包含变量，如
               name: shigebeyond
-              nginx.conf: ${read_file(./nginx.conf)}
+              default.conf: ${read_file(./default.conf)}
               也可以是变量表达式，如 $cfg 或 ${read_yaml(./cfg.yml)}
         '''
         if not isinstance(data, dict):
@@ -236,7 +236,7 @@ class Boot(YamlBoot):
         '''
         以文件内容的方式来设置配置，在挂载configmap时items默认填充用config_from_files()写入的key
         :param files 配置文件list或dict或目录
-                  dict类型： key是配置项名，value是文件路径，如 nginx.conf: ./nginx.conf
+                  dict类型： key是配置项名，value是文件路径，如 default.conf: ./default.conf
                   list类型： 元素是文件路径，会用文件名作为key
                   str类型： 目录/文件路径
         '''
@@ -248,7 +248,7 @@ class Boot(YamlBoot):
         '''
         以读文件内容的方式来构建配置数据
         :param files 配置文件list或dict或目录
-                  dict类型： key是配置项名，value是文件路径，如 nginx.conf: ./nginx.conf
+                  dict类型： key是配置项名，value是文件路径，如 default.conf: ./default.conf
                   list类型： 元素是文件路径，会用文件名作为key
                   str类型： 目录/文件路径
         '''
@@ -296,7 +296,7 @@ class Boot(YamlBoot):
         生成密钥， 其实跟config差不多，只不过config是明文，secret是密文
         :param data 密钥项，可以是键值对，可以包含变量，如
               name: shigebeyond
-              nginx.conf: ${read_file(./nginx.conf)}
+              default.conf: ${read_file(./default.conf)}
               也可以是变量表达式，如 $cfg 或 ${read_yaml(./cfg.yml)}
         '''
         if not isinstance(data, dict):
@@ -308,7 +308,7 @@ class Boot(YamlBoot):
         '''
         以文件内容的方式来设置配置，在挂载secret时items默认填充用secret_files()写入的key
         :param files 配置文件list或dict或目录
-                  dict类型： key是配置项名，value是文件路径，如 nginx.conf: ./nginx.conf
+                  dict类型： key是配置项名，value是文件路径，如 default.conf: ./default.conf
                   list类型： 元素是文件路径，会用文件名作为key
                   str类型： 目录/文件路径
         '''
@@ -1260,7 +1260,7 @@ class Boot(YamlBoot):
                     file:///var/run/docker.sock:/var/run/docker.sock:ro -- 挂载文件，只读
                     nfs://192.168.159.14/data:/mnt -- 挂载nfs
                     config://:/etc/nginx/conf.d -- 将configmap挂载为目录
-                    config://nginx.conf:/etc/nginx/nginx.conf -- 将configmap中key=nginx.conf的单个配置项挂载为文件，不同的key写不同的行
+                    config://default.conf:/etc/nginx/conf.d/default.conf -- 将configmap中key=default.conf的单个配置项挂载为文件，不同的key写不同的行
                     downwardAPI://:/etc/podinfo -- 将元数据labels和annotations以文件的形式挂载到目录
                     downwardAPI://labels:/etc/podinfo/labels.properties -- 将元数据labels挂载为文件
                     其中生成的卷名为 vol-md5(最后一个:之前的部分)
