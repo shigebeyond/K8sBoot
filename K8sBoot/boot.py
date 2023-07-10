@@ -45,6 +45,8 @@ class Boot(YamlBoot):
         self.output_dir = output_dir or 'out'
         # step_dir作为当前目录
         self.step_dir_as_cwd = True
+        # 不需要输出统计结果到stat.yml
+        self.stat_dump = False
         # 动作映射函数
         actions = {
             'ns': self.ns,
@@ -91,7 +93,7 @@ class Boot(YamlBoot):
         self._service_type2ports = {} # 记录service类型对端口映射
         self._is_sts = False # 是否用 statefulset 来部署
 
-    # 清空app相关的属性
+        # 清空app相关的属性
     def clear_app(self):
         self._app = ''  # 应用名
         set_var('app', None)
