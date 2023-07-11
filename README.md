@@ -2,7 +2,7 @@
 
 # K8sBoot - yaml驱动k8s配置生成
 
-## 概述
+## 1 概述
 k8s太复杂了，特别是配置，学习与使用成本很高，大部分伙伴很难学会，因此创作了K8sBoot工具，支持通过简化版的yaml配置来生成k8s最终的配置文件；
 
 框架通过编写简单的yaml, 就可以执行一系列复杂的操作步骤, 如打印变量/生成rc/rs/deploy等资源文件，极大的简化了伙伴编写k8s配置文件的工作量与工作难度，大幅提高人效；
@@ -11,17 +11,17 @@ k8s太复杂了，特别是配置，学习与使用成本很高，大部分伙�
 
 框架提供`include`机制，用来加载并执行其他的步骤yaml，一方面是功能解耦，方便分工，一方面是功能复用，提高效率与质量，从而推进脚本整体的工程化。
 
-## 特性
+## 2 特性
 1. 支持通过yaml来配置执行的步骤，简化了生成代码的开发:
 每个步骤可以有多个动作，但单个步骤中动作名不能相同（yaml语法要求）;
 动作代表k8s的某个资源定义，如config/rc/rs/deploy等等;
 2. 支持类似python`for`/`if`/`break`语义的步骤动作，灵活适应各种场景
 3. 支持`include`引用其他的yaml配置文件，以便解耦与复用
 
-## 搭配k8s命令简化框架，使用更简单
+## 3 搭配k8s命令简化框架，使用更简单
 [k8scmd](https://github.com/shigebeyond/k8scmd)：对k8s的复杂命令做了大量简化
 
-## 同类yaml驱动框架
+## 4 同类yaml驱动框架
 [HttpBoot](https://github.com/shigebeyond/HttpBoot)
 [SeleniumBoot](https://github.com/shigebeyond/SeleniumBoot)
 [AppiumBoot](https://github.com/shigebeyond/AppiumBoot)
@@ -29,10 +29,10 @@ k8s太复杂了，特别是配置，学习与使用成本很高，大部分伙�
 [ExcelBoot](https://github.com/shigebeyond/ExcelBoot)
 [MonitorBoot](https://github.com/shigebeyond/MonitorBoot)
 
-## todo
+## 5 todo
 1. 支持更多的动作
 
-## 安装
+## 6 安装
 ```
 pip3 install K8sBoot
 ```
@@ -44,7 +44,7 @@ pip3 install K8sBoot
 export PATH="$PATH:/home/shi/.local/bin"
 ```
 
-## 使用
+## 7 使用
 ```
 # 1 执行单个文件
 K8sBoot 步骤配置文件.yml
@@ -76,15 +76,8 @@ data
 └── hello-svc.yml
 ```
 
-## 步骤配置文件及demo
-用于指定多个步骤, 示例见源码 [example](example) 目录下的文件;
-
-顶级的元素是步骤;
-
-每个步骤里有多个动作(如config/rc/rs/deploy)，如果动作有重名，就另外新开一个步骤写动作，这是由yaml语法限制导致的，但不影响步骤执行。
-
-## 配置详解
-支持通过yaml来配置执行的步骤;
+## 8 步骤yaml详解
+支持通过yaml文件来配置执行的步骤;
 
 每个步骤可以有多个动作，但单个步骤中动作名不能相同（yaml语法要求）;
 
@@ -92,7 +85,7 @@ data
 
 下面详细介绍每个动作
 
-### 基本动作
+### 8.1 基本动作
 1. ns：设置与生成 namespace 资源
 ```yaml
 ns: 命名空间名
@@ -182,7 +175,7 @@ moveon_if: for_i<=2 # 条件表达式，python语法
 include: part-common.yml
 ```
 
-### app作用域下的子动作
+### 8.2 app作用域下的子动作
 以下的动作，必须声明在app动作的子步骤中，动作的参数支持传递变量
 
 12. labels：设置应用标签
@@ -394,3 +387,86 @@ ingress:
     # 路径重写，如果是/api/hello，则去掉前缀api，访问服务的/hello，网关一般这么搞
     http://k8s.com/api(/|$)(.*): 80  
 ```
+
+## 9 demo
+示例见源码 [example](example) 目录，接下来以 [example/ingress](example/ingress) 为案例讲解下 K8sBoot 与 k8scmd 的使用:
+
+1. 目录结构
+```
+shi@shi-PC:[~/code/python/K8sBoot]: tree example/ingress/
+example/ingress/
+├── 1hello.yml
+├── 2demo.yml
+└── 3gateway.yml
+```
+
+2. 步骤yaml
+```yaml
+# 1hello.yml
+- app(hello):
+    - containers:
+        hello:
+          image: registry.cn-hangzhou.aliyuncs.com/lfy_k8s_images/hello-server
+          ports: # 端口映射
+            - 8000:9000 # 服务端口:容器端口
+    # 部署
+    - deploy:
+        replicas: 2 # 副本数
+# 2demo.yml
+- app(demo):
+    - containers:
+        demo:
+          image: nginxdemos/hello:plain-text
+          ports: # 端口映射
+            - 8001:80 # 服务端口:容器端口
+    # 部署
+    - deploy:
+        replicas: 2 # 副本数
+# 3gateway.yml
+- app(gateway):
+    - ingress:
+        # url对转发的(服务)端口映射，支持字典树形式
+        k8s.com:
+            /hello: hello:8000 # 指定应用的服务端口
+            /demo: demo:8001
+```
+
+3. 生成k8s资源文件
+```sh
+K8sBoot example/ingress/ -o data
+```
+生成文件如下:
+```
+shi@shi-PC:[~/code/python/K8sBoot]: tree data/
+data/
+├── demo-deploy.yml
+├── demo-svc.yml
+├── gateway-ingress.yml
+├── hello-deploy.yml
+└── hello-svc.yml
+```
+
+4. 应用k8s资源文件
+```sh
+kubectl apply --record=true -f data/
+```
+
+5. 查看pod
+
+![](img/pod.png)
+   
+6. 查看service
+
+![](img/svc.png)
+
+7. 访问service url
+
+![](img/svc-access.png)
+
+8. 查看ingress
+
+![](img/ingress.png)
+
+9. 访问ingress
+
+![](img/ingress-access.png)
