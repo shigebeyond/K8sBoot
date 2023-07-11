@@ -139,7 +139,7 @@ class Boot(YamlBoot):
         '''
         打印 kubectl apply 命令
         '''
-        cmd = f'App[{self._app}]的资源配置文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl apply --record=true -f {self.output_dir}'
+        cmd = f'App[{self._app}]的资源定义文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl apply --record=true -f {self.output_dir}'
         log.info(cmd)
 
     # --------- 动作处理的函数 --------

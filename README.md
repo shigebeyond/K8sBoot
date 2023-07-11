@@ -1,11 +1,11 @@
 [GitHub](https://github.com/shigebeyond/K8sBoot) | [Gitee](https://gitee.com/shigebeyond/K8sBoot)
 
-# K8sBoot - yaml驱动k8s配置生成
+# K8sBoot - yaml驱动k8s资源定义文件的生成
 
 ## 1 概述
-k8s太复杂了，特别是配置，学习与使用成本很高，大部分伙伴很难学会，因此创作了K8sBoot工具，支持通过简化版的yaml配置来生成k8s最终的配置文件；
+k8s太复杂了，特别是资源定义文件，学习与使用成本很高，大部分伙伴很难学会，因此创作了K8sBoot工具，支持通过简化版的yaml配置来生成k8s最终的资源定义文件，yaml的代码量大大缩小；
 
-框架通过编写简单的yaml, 就可以执行一系列复杂的操作步骤, 如打印变量/生成rc/rs/deploy等资源文件，极大的简化了伙伴编写k8s配置文件的工作量与工作难度，大幅提高人效；
+框架通过编写简单的yaml, 就可以执行一系列复杂的操作步骤, 如打印变量/生成rc/rs/deploy等资源文件，极大的简化了伙伴编写k8s资源定义文件的工作量与工作难度，大幅提高人效；
 
 框架通过提供类似python`for`/`if`/`break`语义的步骤动作，赋予伙伴极大的开发能力与灵活性，能适用于广泛的应用场景。
 
@@ -16,7 +16,8 @@ k8s太复杂了，特别是配置，学习与使用成本很高，大部分伙�
 每个步骤可以有多个动作，但单个步骤中动作名不能相同（yaml语法要求）;
 动作代表k8s的某个资源定义，如config/rc/rs/deploy等等;
 2. 支持类似python`for`/`if`/`break`语义的步骤动作，灵活适应各种场景
-3. 支持`include`引用其他的yaml配置文件，以便解耦与复用
+3. 支持`include`引用其他的yaml文件，以便解耦与复用
+4. yaml的代码量大大缩小，K8sBoot的yaml代码量相当于k8s资源文件的1/4~1/10
 
 ## 3 搭配k8s命令简化框架，使用更简单
 [k8scmd](https://github.com/shigebeyond/k8scmd)：对k8s的复杂命令做了大量简化
@@ -66,7 +67,7 @@ shi@shi-PC:[~/code/python/K8sBoot]: K8sBoot example/ingress/1hello.yml -o data/
 2023-07-10 18:29:02,860 - ThreadPoolExecutor-0_0        - boot - DEBUG - handle action: app(hello)=[{'containers': {'hello': {'image': 'registry.cn-hangzhou.aliyuncs.com/lfy_k8s_images/hello-server', 'ports': ['8000:9000']}}}, {'deploy': {'replicas': 2}}]
 2023-07-10 18:29:02,860 - ThreadPoolExecutor-0_0        - boot - DEBUG - handle action: containers={'hello': {'image': 'registry.cn-hangzhou.aliyuncs.com/lfy_k8s_images/hello-server', 'ports': ['8000:9000']}}
 2023-07-10 18:29:02,860 - ThreadPoolExecutor-0_0        - boot - DEBUG - handle action: deploy={'replicas': 2}
-2023-07-10 18:29:02,862 - ThreadPoolExecutor-0_0        - boot - INFO - App[hello]的资源配置文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl apply --record=true -f /home/shi/code/python/K8sBoot/data
+2023-07-10 18:29:02,862 - ThreadPoolExecutor-0_0        - boot - INFO - App[hello]的资源定义文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl apply --record=true -f /home/shi/code/python/K8sBoot/data
 ```
 命令会自动操作并生成k8s资源文件
 ```
@@ -94,7 +95,7 @@ ns: 命名空间名
 2. app：生成应用，并执行子步骤
 ```yaml
 app(应用名):
-	# 子步骤
+    # 子步骤
     - config:
         auther: shigebeyond
 ```
@@ -181,7 +182,8 @@ include: part-common.yml
 12. labels：设置应用标签
 ```yaml
 labels: 
-	env: prod
+    env: prod
+    env2: $env # 支持传递变量
 ```
 
 13. config：以键值对的方式来设置 Config 资源
@@ -266,7 +268,7 @@ containers:
 18. initContainers：设置初始化容器，用于生成资源 pod / ReplicationController / ReplicaSet / DaemonSet / StatefulSet / Deployment / Job / Cronjob / HorizontalPodAutoscaler 文件中的 `spec.initContainers` 元素
 ```yaml
 initContainers: 
-	# 参数跟 containers 动作一样
+    # 参数跟 containers 动作一样
 ```
 
 19. pod：生成 pod 资源
@@ -277,7 +279,7 @@ pod:
 20. deploy：生成 Deployment 资源
 ```yaml
 deploy:
-	replicas: 1 # 副本数
+    replicas: 1 # 副本数
 # 简写
 deploy: 1
 
@@ -314,7 +316,7 @@ deploy:
 21. rc：生成 ReplicationController 资源
 ```yaml
 rc:
-	replicas: 1 # 副本数
+    replicas: 1 # 副本数
 # 简写
 rc: 1
 # 更详细的参数：参考 deploy 动作
@@ -323,7 +325,7 @@ rc: 1
 22. rs：生成 ReplicaSet 资源
 ```yaml
 rs:
-	replicas: 1 # 副本数
+    replicas: 1 # 副本数
 # 简写
 rs: 1
 # 更详细的参数：参考 deploy 动作
@@ -332,7 +334,7 @@ rs: 1
 23. ds：生成 DaemonSet 资源
 ```yaml
 ds:
-	replicas: 1 # 副本数
+    replicas: 1 # 副本数
 # 简写
 ds: 1
 # 更详细的参数：参考 deploy 动作
@@ -341,7 +343,7 @@ ds: 1
 24. sts：生成 StatefulSet 资源
 ```yaml
 sts:
-	replicas: 1 # 副本数
+    replicas: 1 # 副本数
 # 简写
 sts: 1
 # 更详细的参数：参考 deploy 动作
@@ -350,7 +352,7 @@ sts: 1
 25. job：生成 Job 资源
 ```yaml
 job:
-	replicas: 1 # 副本数
+    replicas: 1 # 副本数
 # 简写
 job: 1
 # 更详细的参数：参考 deploy 动作
@@ -359,7 +361,7 @@ job: 1
 26. cronjob：生成 Cronjob 资源
 ```yaml
 cronjob:
-	replicas: 1 # 副本数
+    replicas: 1 # 副本数
 # 简写
 cronjob: 1
 # 更详细的参数：参考 deploy 动作
@@ -368,7 +370,7 @@ cronjob: 1
 27. hpa：生成 HorizontalPodAutoscaler 资源
 ```yaml
 hpa:
-	replicas: 1 # 副本数
+    replicas: 1 # 副本数
 # 简写
 hpa: 1
 # 更详细的参数：参考 deploy 动作
@@ -389,7 +391,7 @@ ingress:
 ```
 
 ## 9 demo
-示例见源码 [example](example) 目录，接下来以 [example/ingress](example/ingress) 为案例讲解下 K8sBoot 与 k8scmd 的使用:
+示例见源码 [example](example) 目录，接下来以 [example/ingress](example/ingress) 为案例讲解下 K8sBoot 与 [k8scmd](https://github.com/shigebeyond/k8scmd) 的使用:
 
 1. 目录结构
 ```
@@ -435,7 +437,7 @@ example/ingress/
 ```sh
 K8sBoot example/ingress/ -o data
 ```
-生成文件如下:
+生成的文件如下:
 ```
 shi@shi-PC:[~/code/python/K8sBoot]: tree data/
 data/
@@ -444,6 +446,121 @@ data/
 ├── gateway-ingress.yml
 ├── hello-deploy.yml
 └── hello-svc.yml
+```
+生成的文件内容，其代码量是K8sBoot的yaml代码量的4.4倍
+```yaml
+# demo-deploy.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels: &id001
+    app: demo
+  name: demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels: *id001
+  template:
+    metadata:
+      labels: *id001
+    spec:
+      containers:
+      - image: nginxdemos/hello:plain-text
+        imagePullPolicy: IfNotPresent
+        name: demo
+        ports:
+        - containerPort: 80
+      restartPolicy: Always
+      volumes: []
+---
+# demo-svc.yml
+apiVersion: v1
+kind: Service
+metadata:
+  labels: &id001
+    app: demo
+  name: demo-svc-vip
+spec:
+  ports:
+  - name: p80
+    port: 8001
+    protocol: TCP
+    targetPort: 80
+  selector: *id001
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+# hello-deploy.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels: &id001
+    app: hello
+  name: hello
+spec:
+  replicas: 2
+  selector:
+    matchLabels: *id001
+  template:
+    metadata:
+      labels: *id001
+    spec:
+      containers:
+      - image: registry.cn-hangzhou.aliyuncs.com/lfy_k8s_images/hello-server
+        imagePullPolicy: IfNotPresent
+        name: hello
+        ports:
+        - containerPort: 9000
+      restartPolicy: Always
+      volumes: []
+---
+# hello-svc.yml
+apiVersion: v1
+kind: Service
+metadata:
+  labels: &id001
+    app: hello
+  name: hello-svc-vip
+spec:
+  ports:
+  - name: p9000
+    port: 8000
+    protocol: TCP
+    targetPort: 9000
+  selector: *id001
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+# gateway-ingress.yml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    app: gateway
+  name: gateway
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: k8s.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: hello-svc-vip
+            port:
+              number: 8000
+        path: /hello
+        pathType: Prefix
+      - backend:
+          service:
+            name: demo-svc-vip
+            port:
+              number: 8001
+        path: /demo
+        pathType: Prefix
+  tls: []
 ```
 
 4. 应用k8s资源文件
