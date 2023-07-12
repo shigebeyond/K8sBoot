@@ -705,6 +705,29 @@ class Boot(YamlBoot):
         :param url2port: url对服务端口的映射，dict类型，支持字典树形式
         :return:
         '''
+        # 如果参数是int/str，则表示是默认后端
+        if isinstance(url2port, (int, str)):
+            # 分割出转发的后端服务名+服务端口
+            service_name, service_port = self.split_backend_service_and_port(url2port)
+            yaml = {
+                "apiVersion": "networking.k8s.io/v1",
+                "kind": "Ingress",
+                "metadata": self.build_metadata(),
+                "spec": {
+                    "ingressClassName": "nginx",
+                    "defaultBackend": {
+                        "service": {  # 转发给哪个服务
+                            "name": service_name,
+                            "port": {
+                                "number": service_port
+                            }
+                        }
+                    }
+                }
+            }
+            self.save_yaml(yaml, '-ingress.yml')
+            return
+
         # 修正字典树的路径
         url2port = self.fix_trie_paths(url2port)
         # 按域名分组
@@ -726,14 +749,8 @@ class Boot(YamlBoot):
                 # 检查有重写路径，如 http://www.k8s.com/api(/|$)(.*)
                 if '(' in url.path:
                     rewrite = True
-                # 获得转发的应用名
-                if isinstance(service_port, str) and ':' in service_port: # 有指定应用名
-                    app, service_port = service_port.split(':')
-                    service_port = int(service_port)
-                else: # 无指定应用名，则为当前应用
-                    app = self._app
-                # 获得转发的服务名
-                service_name = self.get_service_name_by_port(service_port, app)
+                # 分割出转发的后端服务名+服务端口
+                service_name, service_port = self.split_backend_service_and_port(service_port)
                 path = {
                     "pathType": "Prefix",
                     "path": url.path,
@@ -786,6 +803,18 @@ class Boot(YamlBoot):
             }
         }
         self.save_yaml(yaml, '-ingress.yml')
+
+    # 分割出转发的后端服务名+服务端口
+    def split_backend_service_and_port(self, service_port):
+        # 获得转发的应用名
+        if isinstance(service_port, str) and ':' in service_port:  # 有指定应用名
+            app, service_port = service_port.split(':')
+            service_port = int(service_port)
+        else:  # 无指定应用名，则为当前应用
+            app = self._app
+        # 获得转发的服务名
+        service_name = self.get_service_name_by_port(service_port, app)
+        return service_name, service_port
 
     def service(self):
         '''
@@ -927,7 +956,7 @@ class Boot(YamlBoot):
             option = replace_var(option, False)
         ret = {
             "name": name,
-            "image": get_and_del_dict_item(option, 'image'),
+            "image": get_and_del_dict_item(option, 'image', 'busybox'),
             "imagePullPolicy": get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
             "env": self.build_env(get_and_del_dict_item(option, 'env')),
             "envFrom": self.build_env_from(get_and_del_dict_item(option, 'env_from')),

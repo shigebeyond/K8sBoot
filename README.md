@@ -422,6 +422,11 @@ ingress:
     http://k8s.com/api(/|$)(.*): 80  
 ```
 
+默认后端服务
+```yaml
+ingress: nginx:80 # 直接int或str
+```
+
 ## 9 demo
 示例见源码 [example](example) 目录，接下来以 [example/ingress](example/ingress) 为案例讲解下 K8sBoot 与 [k8scmd](https://github.com/shigebeyond/k8scmd) 的使用:
 
