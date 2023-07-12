@@ -1,0 +1,9 @@
+# https://zhuanlan.zhihu.com/p/425153103
+- app(clock):
+    - containers:
+        clock:
+          image: busybox
+          command: 'date'
+    # 定时任务
+    - cronjob:
+        schedule: "*/1 * * * *"

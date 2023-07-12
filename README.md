@@ -1,6 +1,6 @@
 [GitHub](https://github.com/shigebeyond/K8sBoot) | [Gitee](https://gitee.com/shigebeyond/K8sBoot)
 
-# K8sBoot - yaml驱动k8s资源定义文件的生成
+# K8sBoot - 简化k8s资源定义文件
 
 ## 1 概述
 k8s太复杂了，特别是资源定义文件，学习与使用成本很高，大部分伙伴很难学会，因此创作了K8sBoot工具，支持通过简化版的yaml配置来生成k8s最终的资源定义文件，yaml的代码量大大缩小；
@@ -349,22 +349,54 @@ sts: 1
 # 更详细的参数：参考 deploy 动作
 ```
 
-25. job：生成 Job 资源
+25. job：生成 Job 资源:
+完整写法
 ```yaml
-job:
-    replicas: 1 # 副本数
-# 简写
-job: 1
-# 更详细的参数：参考 deploy 动作
+- app(counter):
+    - containers:
+        counter:
+          image: busybox
+          command: 'for i in 9 8 7 6 5 4 3 2 1; do echo \$i;sleep 2;done'
+    # 任务
+    - job:
+        completions: 2 # job需要成功运行 Pods 的次数。默认为1
+        parallelism: 2 # job在任一时刻应该并发运行 Pods 的数量。默认为1，如果上面的 completions 为 6 ，这个参数为 3 ，表示有 6 个 pod，允许有 3 个 pod 并发运行
+        activeDeadlineSeconds: 30 # job可运行的时间期限，超过时间还未结束，系统将会尝试进行终止。
+        backoffLimit: 3 # job失败后进行重试的次数。默认为6
+```
+简写
+```yaml
+- app(counter):
+    # 任务
+    - job:
+        completions: 2 # job需要成功运行 Pods 的次数。默认为1
+        parallelism: 2 # job在任一时刻应该并发运行 Pods 的数量。默认为1，如果上面的 completions 为 6 ，这个参数为 3 ，表示有 6 个 pod，允许有 3 个 pod 并发运行
+        activeDeadlineSeconds: 30 # job可运行的时间期限，超过时间还未结束，系统将会尝试进行终止。
+        backoffLimit: 3 # job失败后进行重试的次数。默认为6
+        # 任务命令：当没有声明容器时，它会自动构建一个busybox的container来运行命令
+        command: 'for i in 9 8 7 6 5 4 3 2 1; do echo \$i;sleep 2;done'
 ```
 
-26. cronjob：生成 Cronjob 资源
+26. cronjob：生成 Cronjob 资源:
+完整写法
 ```yaml
-cronjob:
-    replicas: 1 # 副本数
-# 简写
-cronjob: 1
-# 更详细的参数：参考 deploy 动作
+- app(clock):
+    - containers:
+        clock:
+          image: busybox
+          command: 'date'
+    # 定时任务
+    - cronjob:
+        schedule: "*/1 * * * *"
+```
+简写
+```yaml
+- app(clock):
+    # 定时任务
+    - cronjob:
+        schedule: "*/1 * * * *"
+        # 任务命令：当没有声明容器时，它会自动构建一个busybox的container来运行命令
+        command: 'date'
 ```
 
 27. hpa：生成 HorizontalPodAutoscaler 资源

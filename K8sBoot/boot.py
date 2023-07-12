@@ -473,35 +473,50 @@ class Boot(YamlBoot):
         '''
         生成job(批处理任务)
         :params option 部署选项 {completions, parallelism, activeDeadlineSeconds, backoffLimit, ttlSecondsAfterFinished, nodeSelector}
-                        completions 标志Job结束需要成功运行的Pod个数
-                        parallelism 标志并行运行的Pod的个数
+                        completions 标志Job结束需要成功运行的Pod个数，默认为1
+                        parallelism 标志并行运行的Pod的个数，默认为1
                         activeDeadlineSeconds 表示 Pod 可以运行的最长时间，达到设置的该值后，Pod 会自动停止，优先于 backoffLimit
-                        backoffLimit 最大允许失败的次数
+                        backoffLimit 最大允许失败的次数，默认6
                         ttlSecondsAfterFinished 任务完成后的n秒后自动删除pod
                         nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        command 任务命令，仅当没有调用containers动作时才有效，它会构建一个busybox的container
         '''
         yaml = {
-            "apiVersion": "apps/v1",
+            "apiVersion": "batch/v1",
             "kind": "Job",
             "metadata": self.build_metadata(),
-            **self.build_job(option)
+            "spec": self.build_job(option)
         }
         self.save_yaml(yaml, '-job.yml')
 
-    def build_job(self, option):
+    def build_job(self, option, by_cronjob = False):
+        # 当有command时，尝试构建一个busybox的container来运行命令
+        self.build_busybox_container_for_command(option.get('command'))
+        # 构建job
         job = {
-            "completions": option.get("completions"),
-            "parallelism": option.get("parallelism"),
+            "completions": option.get("completions", 1),
+            "parallelism": option.get("parallelism", 1),
             "activeDeadlineSeconds": option.get("activeDeadlineSeconds"),
-            "backoffLimit": option.get("backoffLimit"),
+            "backoffLimit": option.get("backoffLimit", 6),
             "ttlSecondsAfterFinished": option.get("ttlSecondsAfterFinished"),
-            "spec": {
-                "selector": self.build_selector(option.get("selector")),
-                "template": self.build_pod_template(option, restartPolicy="Never") # pod启动失败时不会重启，而是通过job-controller重新创建pod供节点调度。
-            }
+            "template": self.build_pod_template(option, restartPolicy="Never") # pod启动失败时不会重启，而是通过job-controller重新创建pod供节点调度。
         }
+        # cronjob.jobTemplate 不用指定 selector
+        if not by_cronjob:
+            job["manualSelector"] = True  # 是否可以使用 selector 选择器选择 pod，默认是 false
+            job["selector"] = self.build_selector(option.get("selector"))
         del_dict_none_item(job)
         return job
+
+    # 当没有调用containers动作时，构建一个busybox的container来运行命令
+    def build_busybox_container_for_command(self, cmd):
+        if cmd is not None and not self._containers:
+            self.containers({
+                self._app: {
+                    'image': 'busybox',
+                    'command': cmd,
+                }
+            }, True)
 
     @replace_var_on_params
     def cronjob(self, option):
@@ -512,9 +527,9 @@ class Boot(YamlBoot):
                         schedule cron表达式，格式为 Minutes Hours DayofMonth Month DayofWeek Year，即分 小时 日 月 周，其中?与*都是表示给定字段是任意值
                         startingDeadlineSeconds 过了调度时间n秒后没有启动成功，就不再启动
                         concurrencyPolicy 并发策略： Allow 允许job并发执行，Forbid只允许当前这个执行，Replace取消当前这个，而执行新的
-                        suspend: 是否挂起，如果设置为true，后续所有执行被挂起
-                        successfulJobsHistoryLimit 保留几个成功的历史记录
-                        failedJobsHistoryLimit 保留几个失败的历史记录
+                        suspend: 是否挂起，如果设置为true，后续所有执行被挂起，默认false
+                        successfulJobsHistoryLimit 保留几个成功的历史记录，默认3
+                        failedJobsHistoryLimit 保留几个失败的历史记录，默认1
                         ttlSecondsAfterFinished 任务完成后的n秒后自动删除pod，有该选项，则successfulJobsHistoryLimit和failedJobsHistoryLimit会失效，反正不管成功或失败，到点照样删
                         nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
                         ...其他参数参考 job()
@@ -524,14 +539,15 @@ class Boot(YamlBoot):
             "startingDeadlineSeconds": option.get("startingDeadlineSeconds", 300),
             "concurrencyPolicy": option.get("concurrencyPolicy", "Allow"),
             "suspend": option.get("suspend", False),
-            "successfulJobsHistoryLimit": option.get("successfulJobsHistoryLimit", 1),
+            "successfulJobsHistoryLimit": option.get("successfulJobsHistoryLimit", 3),
             "failedJobsHistoryLimit": option.get("failedJobsHistoryLimit", 1),
-            "selector": self.build_selector(option.get("selector")),
-            "jobTemplate": self.build_job(option)
+            "jobTemplate": {
+                "spec": self.build_job(option, True)
+            }
         }
         del_dict_none_item(spec)
         yaml = {
-            "apiVersion": "apps/v1",
+            "apiVersion": "batch/v1",
             "kind": "CronJob",
             "metadata": self.build_metadata(),
             "spec": spec
@@ -890,15 +906,25 @@ class Boot(YamlBoot):
         if containers:
             self._init_containers = [self.build_container(name, option) for name, option in containers.items()]
 
-    # 不使用 @replace_var_on_params：containers的选项中如果存在用ref_resource_field()的变量表达式来注入env时，而ref_resource_field()是依赖当前容器名，而containers()没执行前是不知道的，因此不能提前替换变量(执行@replace_var_on_params)
-    def containers(self, containers):
-        self._containers = [self.build_container(name, option) for name, option in containers.items()]
+    def containers(self, containers, gen_by_job = False):
+        '''
+        不使用 @replace_var_on_params：containers的选项中如果存在用ref_resource_field()的变量表达式来注入env时，而ref_resource_field()是依赖当前容器名，而containers()没执行前是不知道的，因此不能提前替换变量(执行@replace_var_on_params)
+        :param containers 容器参数
+        :param gen_by_job 是否有job来自动生成的(不需要再对option替换变量)，不是人工定义
+        '''
+        self._containers = [self.build_container(name, option, gen_by_job) for name, option in containers.items()]
 
-    # 构建容器
-    def build_container(self, name, option):
-        # 拿到容器名，才能对option替换变量
+    def build_container(self, name, option, gen_by_job = False):
+        '''
+        构建容器
+        :param name 容器名
+        :param option 容器选项
+        :param gen_by_job 是否有job来自动生成的(不需要再对option替换变量)，不是人工定义
+        '''
         self._curr_container = name
-        option = replace_var(option, False)
+        # 拿到容器名，才能对option替换变量
+        if not gen_by_job:
+            option = replace_var(option, False)
         ret = {
             "name": name,
             "image": get_and_del_dict_item(option, 'image'),
@@ -1445,7 +1471,7 @@ class Boot(YamlBoot):
     def fix_command(self, cmd):
         if isinstance(cmd, str):
             # return re.split('\s+', cmd)  # 空格分割
-            return ["/bin/bash", "-c", cmd] # bash修饰
+            return ["/bin/sh", "-c", cmd] # sh修饰，不用bash(busybox里没有bash)
         return cmd
 
     def ref_pod_field(self, field):

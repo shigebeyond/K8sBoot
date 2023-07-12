@@ -1,0 +1,7 @@
+# https://zhuanlan.zhihu.com/p/425153103
+- app(clock):
+    # 定时任务
+    - cronjob:
+        schedule: "*/1 * * * *"
+        # 任务命令：当没有声明容器时，它会自动构建一个busybox的container来运行命令
+        command: 'date'

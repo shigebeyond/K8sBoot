@@ -1,0 +1,10 @@
+# https://blog.51cto.com/busy/5821450
+- app(counter):
+    # 任务
+    - job:
+        completions: 2 # job需要成功运行 Pods 的次数。默认为1
+        parallelism: 2 # job在任一时刻应该并发运行 Pods 的数量。默认为1，如果上面的 completions 为 6 ，这个参数为 3 ，表示有 6 个 pod，允许有 3 个 pod 并发运行
+        activeDeadlineSeconds: 30 # job可运行的时间期限，超过时间还未结束，系统将会尝试进行终止。
+        backoffLimit: 3 # job失败后进行重试的次数。默认为6
+        # 任务命令：当没有声明容器时，它会自动构建一个busybox的container来运行命令
+        command: 'for i in 9 8 7 6 5 4 3 2 1; do echo \$i;sleep 2;done'
