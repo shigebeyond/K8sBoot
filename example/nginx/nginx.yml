@@ -61,7 +61,8 @@
             # 动作
             action: http://localhost:80 # 在pod中执行，请使用容器端口
           resources: # 资源
-            cpu: 0.01
+            cpu: 0.01 # 最小值
+            #cpu: 0.01~0.02 # 最小值~最大值
             memory: 50Mi
 
     # 部署
