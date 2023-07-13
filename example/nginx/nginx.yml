@@ -44,6 +44,7 @@
             - config://default.conf:/etc/nginx/conf.d/default.conf # 挂载configmap单个key到文件
             - downwardAPI://:/etc/podinfo # 将元数据labels和annotations以文件的形式挂载到目录
             - downwardAPI://labels:/etc/podinfo2/labels.properties # 将元数据labels挂载为文件
+            #- pvc://pvc1:/usr/share/nginx/html # 将pvc挂载为目录
           # 启动命令：命令改写后导致nginx自身服务没起来，应该是覆盖了nginx镜像自身的启动命令
           #command: sed -i 's/POD_IP/\$POD_IP/g' /www/index.html; tail -f /etc/profile
           #command: while true;do echo hello;sleep 1;done # 死循环维持pod运行

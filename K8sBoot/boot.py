@@ -1266,6 +1266,13 @@ class Boot(YamlBoot):
                     "items": self.build_downwardapi_volume_items(host_path)
                 }
             }
+        # pvc: http://www.xbhp.cn/news/19760.html
+        if protocol == 'pvc':
+            return {
+                "persistentVolumeClaim": {
+                    "claimName": host_path
+                }
+            }
         raise Exception(f'暂不支持卷协议: {protocol}')
 
     def build_downwardapi_volume_items(self, host_path):
@@ -1323,6 +1330,7 @@ class Boot(YamlBoot):
                     config://default.conf:/etc/nginx/conf.d/default.conf -- 将configmap中key=default.conf的单个配置项挂载为文件，不同的key写不同的行
                     downwardAPI://:/etc/podinfo -- 将元数据labels和annotations以文件的形式挂载到目录
                     downwardAPI://labels:/etc/podinfo/labels.properties -- 将元数据labels挂载为文件
+                    pvc://pvc1:/usr/share/nginx/html -- 将pvc挂载为目录
                     其中生成的卷名为 vol-md5(最后一个:之前的部分)
         '''
         if mounts is None or len(mounts) == 0:
