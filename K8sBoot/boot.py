@@ -844,17 +844,19 @@ class Boot(YamlBoot):
             yamls.append(yaml)
         self.save_yaml(yamls, '-svc.yml')
 
-    # 服务类型的简写映射
-    service_type_short_map = {
-        'ClusterIP': 'vip',
-        'NodePort': 'np',
+    # 服务类型对服务名后缀的映射
+    service_type2name_postfix = {
+        'ClusterIP': '',
+        'NodePort': '-np',
+        'LoadBalancer': '-lb',
     }
 
     # 构建服务名
     def build_service_name(self, type, app = None):
         if app is None: # 无需app名，用来获得服务名后缀
             app = ''
-        return app + '-svc-' + self.service_type_short_map[type]
+
+        return app + self.service_type2name_postfix[type]
 
     # 通过服务端口来获得服务名
     def get_service_name_by_port(self, service_port, app):

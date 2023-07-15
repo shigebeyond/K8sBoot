@@ -240,7 +240,6 @@ containers:
       volumes: # 卷映射
         - /var/log/nginx
         #- /lnmp/www:/www
-        # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
         - config://:/www # 挂载configmap所有key到目录
         - config://default.conf:/etc/nginx/conf.d/default.conf # 挂载configmap单个key到文件
         - downwardAPI://:/etc/podinfo # 将元数据labels和annotations以文件的形式挂载到目录
