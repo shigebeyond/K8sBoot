@@ -374,7 +374,8 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": {
                 "replicas": option.get("replicas", 1),
-                "selector": self.build_selector(option.get("selector")),
+                #"selector": self.build_selector(option.get("selector")), # 不支持复杂的selector
+                "selector": self.build_labels(option.get("selector")), # 只支持dict的简单selector
                 "template": self.build_pod_template(option)
             }
         }
@@ -390,7 +391,7 @@ class Boot(YamlBoot):
         '''
         option = self.fix_replicas_option(option, 'rs')
         yaml = {
-            "apiVersion": "v1",
+            "apiVersion": "apps/v1",
             "kind": "ReplicaSet",
             "metadata": self.build_metadata(),
             "spec": {
@@ -411,7 +412,7 @@ class Boot(YamlBoot):
         '''
         option = self.fix_replicas_option(option, 'ds')
         yaml = {
-            "apiVersion": "v1",
+            "apiVersion": "apps/v1",
             "kind": "DaemonSet",
             "metadata": self.build_metadata(),
             "spec": {
@@ -420,7 +421,7 @@ class Boot(YamlBoot):
             }
         }
 
-        self.save_yaml(yaml, '-rs.yml')
+        self.save_yaml(yaml, '-ds.yml')
 
     @replace_var_on_params
     def sts(self, option):
@@ -432,7 +433,7 @@ class Boot(YamlBoot):
         '''
         option = self.fix_replicas_option(option, 'sts')
         yaml = {
-            "apiVersion": "v1",
+            "apiVersion": "apps/v1",
             "kind": "StatefulSet",
             "metadata": self.build_metadata(),
             "spec": {
@@ -840,7 +841,9 @@ class Boot(YamlBoot):
             }
             # statefulset 要使用 headless service
             if self._is_sts and type == 'ClusterIP':
-                yaml["spec"]["clusterIP"] = None # HeadLess service
+                # HeadLess service
+                #yaml["spec"]["clusterIP"] = None # wrong: 输出为 clusterIP: null, k8s不认
+                yaml["spec"]["clusterIP"] = 'None' # 输出为 clusterIP: None, k8s认
             yamls.append(yaml)
         self.save_yaml(yamls, '-svc.yml')
 

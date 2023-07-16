@@ -69,7 +69,7 @@
     # 简写
 #    - rc: 1
 #    - rs: 1
-#    - ds: 1
+#    - ds:
 #    - sts: 1
 #    - deploy: 1
 
@@ -77,8 +77,6 @@
 #    - rc:
 #        replicas: 1
 #    - rs:
-#        replicas: 1
-#    - ds:
 #        replicas: 1
 #    - sts:
 #        replicas: 1

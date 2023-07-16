@@ -1,0 +1,13 @@
+- app(demo):
+    - containers:
+        demo:
+          image: nginxdemos/hello:plain-text
+          ports: # 端口映射
+            - 80 # 容器端口
+    # 部署
+#    - rc: 2
+#    - rs: 2
+    - ds:
+#    - sts: 2
+#    - deploy: 2
+

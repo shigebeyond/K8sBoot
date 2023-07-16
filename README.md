@@ -335,9 +335,6 @@ rs: 1
 23. ds：生成 DaemonSet 资源
 ```yaml
 ds:
-    replicas: 1 # 副本数
-# 简写
-ds: 1
 # 更详细的参数：参考 deploy 动作
 ```
 
