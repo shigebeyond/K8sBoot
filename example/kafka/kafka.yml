@@ -16,7 +16,10 @@
             TZ: Asia/Shanghai
             HOSTNAME: kfk
             KAFKA_ADVERTISED_HOST_NAME: ${ref_pod_field(metadata.name)} # pod name
-            KAFKA_CREATE_TOPICS: "REFUND_APPLY:1:1,REFUND_CANCEL:1:1,REFUND_APPLY_AGREE:1:1,REFUND_APPLY_REFUSE:1:1,SYNC_ORDER_APPLY:1:1,SYNC_ORDER_RESULT:1:1,SYNC_GOODS_APPLY:1:1"
+            #KAFKA_ADVERTISED_HOST_NAME: 127.0.0.1
+            KAFKA_ADVERTISED_PORT: 9092
+            KAFKA_PORT: 9092
+            KAFKA_CREATE_TOPICS: "K8sServiceReplicas:1:1"
             KAFKA_ZOOKEEPER_CONNECT: localhost:2181
           volumes:
             - /data/kafka/:/kafka:rw

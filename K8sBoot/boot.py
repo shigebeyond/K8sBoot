@@ -1578,8 +1578,8 @@ class Boot(YamlBoot):
             item = {
                 "name": key,
             }
-            if isinstance(val, str):
-                item["value"] = val
+            if isinstance(val, (str, int, float)):
+                item["value"] = str(val)
             else:
                 item["valueFrom"] = val
             ret.append(item)
