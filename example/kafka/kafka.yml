@@ -19,7 +19,9 @@
             #KAFKA_ADVERTISED_HOST_NAME: 127.0.0.1
             KAFKA_ADVERTISED_PORT: 9092
             KAFKA_PORT: 9092
-            KAFKA_CREATE_TOPICS: "K8sServiceReplicas:1:1"
+            #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+            KAFKA_LISTENERS: PLAINTEXT://:9092
+            KAFKA_CREATE_TOPICS: "K8sServiceReplicas:1:1,topicDemo:1:1"
             KAFKA_ZOOKEEPER_CONNECT: localhost:2181
           volumes:
             - /data/kafka/:/kafka:rw
