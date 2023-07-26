@@ -826,10 +826,13 @@ class Boot(YamlBoot):
             return
         yamls = []
         for type, ports in self.build_service_type2ports():
+            anns = {
+                "kube-router.io/service.scheduler": "lc" # 调度算法为least connection
+            }
             yaml = {
                 "apiVersion": "v1",
                 "kind": "Service",
-                "metadata": self.build_metadata(self.build_service_name(type)),
+                "metadata": self.build_metadata(self.build_service_name(type), anns),
                 "spec": {
                     "type": type,
                     "ports": list(ports),
