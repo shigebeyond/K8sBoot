@@ -1,0 +1,38 @@
+- app(elk):
+    - config_from_files: # 配置文件
+        - ../cfg/logstash.yml
+        - ../cfg/logstash-simple.conf
+    - containers:
+        elasticsearch:
+          image: elastic/elasticsearch:7.9.2
+          env:
+            - discovery.type=single-node
+            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+            - TZ=Asia/Shanghai
+          volumes:
+            - /data/es:/usr/share/elasticsearch/data
+          ports:
+            - 9200:9200
+            - 9300:9300
+        kibana:
+          image: elastic/kibana:7.9.2
+          env:
+            elasticsearch.hosts: http://localhost:9200
+            TZ: Asia/Shanghai
+          ports:
+            - "5601:5601"
+        logstash:
+          image: elastic/logstash:7.9.2
+          env:
+            TZ: Asia/Shanghai
+          volumes:
+            - config://:/usr/share/logstash/config
+            - /data/log/logstash:/usr/share/logstash/logs
+          ports:
+            - 9600:9600
+            - 5044:5044
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: hww-pc

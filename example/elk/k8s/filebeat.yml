@@ -1,0 +1,15 @@
+- app(filebeat):
+    - config_from_files: # 配置文件
+        - ../cfg/filebeat.yml
+    - containers:
+        filebeat:
+          image: elastic/filebeat:7.9.2
+          volumes:
+            - /data/filebeat:/usr/share/filebeat/data
+            - config://filebeat.yml:/usr/share/filebeat/filebeat.yml
+            - /data/log/filebeat:/usr/share/filebeat/logs
+          env:
+            - TZ=Asia/Shanghai
+          command: [ "--strict.perms=false" ]
+    # 部署
+    - ds:
