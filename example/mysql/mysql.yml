@@ -1,0 +1,18 @@
+# https://blog.csdn.net/nuptaxin/article/details/123306013
+# 连接: mysql -h$mac -P30056 -uroot -proot
+- app(mysql):
+    - containers:
+        mysql56:
+          image: mysql:5.6.49
+          env:
+            MYSQL_ROOT_PASSWORD: root
+            TZ: Asia/Shanghai
+          ports: # 端口映射
+            - 30056:3306:3306 # 宿主机端口:服务端口:容器端口
+          volumes: # 卷映射
+            - /data/mysql56:/var/lib/mysql/
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: mac

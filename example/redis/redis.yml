@@ -1,0 +1,19 @@
+# https://www.jianshu.com/p/094078ef4347
+# 连接: redis-cli -h $mac -p 26379
+- app(redis):
+    - config_from_files: # 配置文件
+        - ./redis.conf
+    - containers:
+        redis:
+          image: redis:6.2.6
+          command: redis-server /etc/redis/redis.conf
+          ports: # 端口映射
+            - 26379:6379:6379 # 宿主机端口:服务端口:容器端口
+          volumes: # 卷映射
+            - /data/redis:/data
+            - config://redis.conf:/etc/redis/redis.conf
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: mac
