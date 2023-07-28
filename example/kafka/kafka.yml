@@ -11,17 +11,20 @@
         kafka:
           image: wurstmeister/kafka:2.13-2.7.0
           ports:
-            - "9092:9092"
+            - "9092:9092:9092"
           env:
             TZ: Asia/Shanghai
-            HOSTNAME: kfk
-            KAFKA_ADVERTISED_HOST_NAME: ${ref_pod_field(metadata.name)} # pod name
-            #KAFKA_ADVERTISED_HOST_NAME: 127.0.0.1
+            HOSTNAME: 192.168.62.209
+            # 部署1: client访问用service vip, 不用开放nodeport
+#            KAFKA_ADVERTISED_HOST_NAME: ${ref_pod_field(metadata.name)} # pod name
+#            KAFKA_LISTENERS: PLAINTEXT://:9092
+            # 部署2: client访问用宿主机的固定ip, 要开放nodeport
+            KAFKA_ADVERTISED_HOST_NAME: 192.168.62.209
+            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://192.168.62.209:9092
+
             KAFKA_ADVERTISED_PORT: 9092
             KAFKA_PORT: 9092
-            #KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
-            KAFKA_LISTENERS: PLAINTEXT://:9092
-            KAFKA_CREATE_TOPICS: "K8sServiceReplicas:1:1,topicDemo:1:1"
+            KAFKA_CREATE_TOPICS: "K8sServiceReplicas:1:1,topicDemo:1:1,topic1:1:1,topic2:1:1"
             KAFKA_ZOOKEEPER_CONNECT: localhost:2181
           volumes:
             - /data/kafka/:/kafka:rw
@@ -30,9 +33,9 @@
           env:
               ZK_HOSTS: localhost
           ports:
-            - "9100:9000"
+            - "9100:9100:9000"
     # 部署
     - deploy:
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
-          kubernetes.io/hostname: hww-pc
+          kubernetes.io/hostname: mac
