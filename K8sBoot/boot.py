@@ -1350,9 +1350,10 @@ class Boot(YamlBoot):
         for mount in mounts:
             # 1 解析末尾的 rw ro
             ro = False # 是否只读
-            mat = re.search(':r[wo]', mount)
+            mat = re.search(':r[wo]$', mount)
             if mat is not None:
                 ro = mat.group(0) == ':ro'
+                mount = mount[:-3] # 干掉末尾的 rw ro
 
             # 2 解析协议：协议格式参考函数注释
             if ':' not in mount:
