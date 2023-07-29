@@ -1,33 +1,27 @@
+- set_vars:
+    zk_host: 172.16.1.94:2181 # zk service vip + 容器端口
 - app(kafka):
-    - config_from_files: # 文件list
-        - ./server.properties
     - containers:
-        zookeeper:
-          image: wurstmeister/zookeeper
-          env:
-            TZ: Asia/Shanghai
-          ports:
-            - "2181:2181"
-          volumes:
-#            - /data/zookeeper/:/opt/zookeeper-3.4.13/data:rw
         kafka:
-          image: registry.cn-hangzhou.aliyuncs.com/k8s-image01/kafka:2.13-2.8.0
-          command: exec kafka-server-start.sh /opt/kafka/config/server.properties
+          image: wurstmeister/kafka
           ports:
             - "9092:9092:9092"
           env:
-            TZ: Asia/Shanghai
+            KAFKA_BROKER_ID: "1"
+            KAFKA_ZOOKEEPER_CONNECT: $zk_host # zk service vip + 容器端口
+            KAFKA_LISTENERS: PLAINTEXT://:9092
+            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
           volumes:
 #            - /data/kafka/:/kafka:rw
-            - config://server.properties:/opt/kafka/config/server.properties:ro
-        kafka-manager:
-          image: sheepkiller/kafka-manager # web管理界面
-          env:
-              ZK_HOSTS: localhost
-          ports:
-            - "9100:9000"
+#        kafka-manager:
+#          image: sheepkiller/kafka-manager # web管理界面
+#          env:
+#              ZK_HOSTS: $zk_host
+#          ports:
+#            - "9100:9000"
     # 部署
     - deploy:
+        hostname: kafka-broker
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
-          kubernetes.io/hostname: hww-pc
+          kubernetes.io/hostname: mac

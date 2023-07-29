@@ -1,0 +1,13 @@
+- app(zookeeper):
+    - containers:
+        zookeeper:
+          image:  wurstmeister/zookeeper
+          ports:
+            - "30181:2181:2181"
+          volumes:
+#            - /data/zookeeper/:/opt/zookeeper-3.4.13/data:rw
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: shi-pc
