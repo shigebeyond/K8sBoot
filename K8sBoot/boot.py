@@ -84,6 +84,7 @@ class Boot(YamlBoot):
 
         # app作用域的属性，跳出app时就清空
         self._app = '' # 应用名
+        self._app_as_hostname = False# 应用名作为pod的主机名
         self._labels = {}  # 记录标签
         self._config_data = {} # 记录设置过的配置
         self._config_file_keys = [] # 记录文件类型的key
@@ -98,6 +99,7 @@ class Boot(YamlBoot):
         # 清空app相关的属性
     def clear_app(self):
         self._app = ''  # 应用名
+        self._app_as_hostname = False # 应用名作为pod的主机名
         set_var('app', None)
         self._labels = {}  # 记录标签
         self._config_data = {}  # 记录设置过的配置
@@ -195,6 +197,10 @@ class Boot(YamlBoot):
         :param steps 子步骤
         name 应用名
         '''
+        # 如果应用名以@开头, 表示应用名也作为pod的主机名
+        if name.startswith('@'):
+            self._app_as_hostname = True
+            name = name[1:]
         self._app = name
         self._labels = {
             'app': self._app
@@ -658,6 +664,7 @@ class Boot(YamlBoot):
                       podAffinity pod亲和性，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
                       tolerations 容忍
                       activeDeadlineSeconds 表示 Pod 可以运行的最长时间，达到设置的该值后，Pod 会自动停止。
+                      hostname pod的主机名, 如果设置的值为空, 则取app名
         :param restartPolicy 重启策略，默认为Always，对job为Never
         :return
         '''
@@ -677,6 +684,9 @@ class Boot(YamlBoot):
         if host_network:
             spec["hostNetwork"] = host_network
             spec["dnsPolicy"] = option.get("dnsPolicy", "ClusterFirstWithHostNet") # 使用k8s DNS内部域名解析，如果不加，pod默认使用所在宿主主机使用的DNS，这样会导致容器内不能通过service name访问k8s集群中其他POD
+        # hostname: pod的主机名 != pod名, 如kafka中用到
+        if 'hostname' in option or self._app_as_hostname:
+            spec['hostname'] = option.get('hostname') or self._app
         ret = {
             "metadata": {
                 "labels": self.build_labels()
