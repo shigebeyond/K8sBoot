@@ -1,0 +1,13 @@
+- app(showdoc):
+    - containers:
+        showdoc:
+          image: star7th/showdoc
+          ports:
+            - 4999:80:80
+          volumes:
+            - /data/showdoc_data/html:/var/www/html/:rw
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: shi-pc
