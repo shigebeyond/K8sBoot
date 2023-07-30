@@ -1,5 +1,6 @@
+# https://dzone.com/articles/how-to-deploy-apache-kafka-with-kubernetes
 - set_vars:
-    zk_host: 172.16.1.94:2181 # zk service vip + 容器端口
+    zk_host: 10.105.135.75:2181 # zk service vip + 容器端口
 - app(kafka):
     - containers:
         kafka:
@@ -10,7 +11,8 @@
             KAFKA_BROKER_ID: "1"
             KAFKA_ZOOKEEPER_CONNECT: $zk_host # zk service vip + 容器端口
             KAFKA_LISTENERS: PLAINTEXT://:9092
-            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
+            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092 # 注册到zk上要暴露给client调用的server, client自己配kafka-broker的host
+            #KAFKA_CREATE_TOPICS: "K8sServiceReplicas:1:1,my-topic:1:1,topic1:1:1,topic2:1:1"
           volumes:
 #            - /data/kafka/:/kafka:rw
 #        kafka-manager:
@@ -24,4 +26,4 @@
         hostname: kafka-broker
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
-          kubernetes.io/hostname: mac
+          kubernetes.io/hostname: hww-pc
