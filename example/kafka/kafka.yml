@@ -1,6 +1,7 @@
 # https://dzone.com/articles/how-to-deploy-apache-kafka-with-kubernetes
 - set_vars:
-    zk_host: 10.105.135.75:2181 # zk service vip + 容器端口
+#    zk_host: 10.105.212.26:2181 # zk service vip + 容器端口
+    zk_host: 192.168.1.12:30181 # zk nodeip + nodeport
 - app(kafka):
     - containers:
         kafka:
@@ -15,12 +16,12 @@
             #KAFKA_CREATE_TOPICS: "K8sServiceReplicas:1:1,my-topic:1:1,topic1:1:1,topic2:1:1"
           volumes:
 #            - /data/kafka/:/kafka:rw
-#        kafka-manager:
-#          image: sheepkiller/kafka-manager # web管理界面
-#          env:
-#              ZK_HOSTS: $zk_host
-#          ports:
-#            - "9100:9000"
+        kafka-manager:
+          image: sheepkiller/kafka-manager # web管理界面, 直接访问 http://192.168.1.11:9000/
+          env:
+              ZK_HOSTS: $zk_host
+          ports:
+            - "9000:9000:9000"
     # 部署
     - deploy:
         hostname: kafka-broker
