@@ -1,6 +1,11 @@
 - app(filebeat):
     - config_from_files: # 配置文件
         - ../cfg/filebeat.yml
+    - initContainers:
+        init:
+          command: chmod 0777 /usr/share/filebeat/data
+          volumes:
+            - /data/filebeat:/usr/share/filebeat/data
     - containers:
         filebeat:
           image: elastic/filebeat:7.9.2
@@ -9,7 +14,6 @@
             - config://filebeat.yml:/usr/share/filebeat/filebeat.yml
             - /data/log/filebeat:/usr/share/filebeat/logs
           env:
-            - TZ=Asia/Shanghai
-          command: [ "--strict.perms=false" ]
+            TZ: Asia/Shanghai
     # 部署
     - ds:

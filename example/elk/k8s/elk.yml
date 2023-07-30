@@ -1,14 +1,20 @@
+# https://blog.51cto.com/riverxyz/3154605
 - app(elk):
     - config_from_files: # 配置文件
         - ../cfg/logstash.yml
         - ../cfg/logstash-simple.conf
+    - initContainers:
+        init:
+          command: chmod 0777 /usr/share/elasticsearch/data
+          volumes:
+            - /data/es:/usr/share/elasticsearch/data
     - containers:
         elasticsearch:
           image: elastic/elasticsearch:7.9.2
           env:
-            - discovery.type=single-node
-            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-            - TZ=Asia/Shanghai
+            discovery.type: single-node
+            ES_JAVA_OPTS: -Xms512m -Xmx512m
+            TZ: Asia/Shanghai
           volumes:
             - /data/es:/usr/share/elasticsearch/data
           ports:
@@ -33,6 +39,7 @@
             - 5044:5044
     # 部署
     - deploy:
+#        hostname: elasticsearch
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
           kubernetes.io/hostname: hww-pc

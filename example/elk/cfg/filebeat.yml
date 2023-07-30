@@ -17,4 +17,4 @@ filebeat.inputs:
   multiline.timeout: 10s
 
 output.logstash:
-  hosts: ["elk.default:5044"]
+  hosts: ["elk.default.svc.cluster.local:5044"]
