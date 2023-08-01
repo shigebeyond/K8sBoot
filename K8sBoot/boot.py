@@ -122,8 +122,15 @@ class Boot(YamlBoot):
             self.app2ports[app] = []
         return self.app2ports[app]
 
-    # 保存yaml
-    def save_yaml(self, data, file_postfix):
+    def save_yaml(self, data, res):
+        '''
+        保存yaml
+        :param data 资源数据
+        :param res 资源类型，如deploy/ds
+        '''
+        # 检查app名
+        if self._app is None:
+            raise Exception(f"生成{res}资源文件失败: 没有指定应用")
         # 转yaml
         if isinstance(data, list): # 多个资源
             data = list(map(yaml.dump, data))
@@ -134,7 +141,7 @@ class Boot(YamlBoot):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         # 保存文件
-        file = os.path.join(self.output_dir, self._app + file_postfix)
+        file = os.path.join(self.output_dir, f"{self._app}-{res}.yml")
         write_file(file, data)
 
     def print_apply_cmd(self):
@@ -189,7 +196,7 @@ class Boot(YamlBoot):
             "kind": "Namespace",
             "metadata": self._ns,
         }
-        self.save_yaml(yaml, '-ns.yml')
+        self.save_yaml(yaml, 'ns')
 
     def app(self, steps, name=None):
         '''
@@ -297,7 +304,7 @@ class Boot(YamlBoot):
                 "metadata": self.build_metadata(),
                 "data": self._config_data
             }
-            self.save_yaml(yaml, '-config.yml')
+            self.save_yaml(yaml, 'config')
 
     @replace_var_on_params
     def secret(self, data):
@@ -335,7 +342,7 @@ class Boot(YamlBoot):
                 "type": "Opaque",
                 "data": self._secret_data
             }
-            self.save_yaml(yaml, '-secret.yml')
+            self.save_yaml(yaml, 'secret')
 
     # 修正有副本的选项
     def fix_replicas_option(self, option, action):
@@ -364,7 +371,7 @@ class Boot(YamlBoot):
             "kind": "Pod",
             "metadata": self.build_metadata(),
         })
-        self.save_yaml(yaml, '-pod.yml')
+        self.save_yaml(yaml, 'pod')
 
     @replace_var_on_params
     def rc(self, option):
@@ -386,7 +393,7 @@ class Boot(YamlBoot):
             }
         }
 
-        self.save_yaml(yaml, '-rc.yml')
+        self.save_yaml(yaml, 'rc')
 
     @replace_var_on_params
     def rs(self, option):
@@ -407,7 +414,7 @@ class Boot(YamlBoot):
             }
         }
 
-        self.save_yaml(yaml, '-rs.yml')
+        self.save_yaml(yaml, 'rs')
 
     @replace_var_on_params
     def ds(self, option):
@@ -427,7 +434,7 @@ class Boot(YamlBoot):
             }
         }
 
-        self.save_yaml(yaml, '-ds.yml')
+        self.save_yaml(yaml, 'ds')
 
     @replace_var_on_params
     def sts(self, option):
@@ -450,7 +457,7 @@ class Boot(YamlBoot):
             }
         }
 
-        self.save_yaml(yaml, '-sts.yml')
+        self.save_yaml(yaml, 'sts')
 
         self._is_sts = True
 
@@ -473,7 +480,7 @@ class Boot(YamlBoot):
                 "template": self.build_pod_template(option)
             }
         }
-        self.save_yaml(yaml, '-deploy.yml')
+        self.save_yaml(yaml, 'deploy')
 
     @replace_var_on_params
     def job(self, option):
@@ -494,7 +501,7 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": self.build_job(option)
         }
-        self.save_yaml(yaml, '-job.yml')
+        self.save_yaml(yaml, 'job')
 
     def build_job(self, option, by_cronjob = False):
         # 当有command时，尝试构建一个busybox的container来运行命令
@@ -559,7 +566,7 @@ class Boot(YamlBoot):
             "metadata": self.build_metadata(),
             "spec": spec
         }
-        self.save_yaml(yaml, '-cronjob.yml')
+        self.save_yaml(yaml, 'cronjob')
 
     @replace_var_on_params
     def hpa(self, option):
@@ -595,7 +602,7 @@ class Boot(YamlBoot):
                 "metrics": self.build_hpa_metrics(by) # 扩容的度量指标
             }
         }
-        self.save_yaml(yaml, '-hpa.yml')
+        self.save_yaml(yaml, 'hpa')
 
     # 构建扩容的度量指标
     def build_hpa_metrics(self, by):
@@ -736,7 +743,7 @@ class Boot(YamlBoot):
                     }
                 }
             }
-            self.save_yaml(yaml, '-ingress.yml')
+            self.save_yaml(yaml, 'ingress')
             return
 
         # 修正字典树的路径
@@ -813,7 +820,7 @@ class Boot(YamlBoot):
                 "rules": rules
             }
         }
-        self.save_yaml(yaml, '-ingress.yml')
+        self.save_yaml(yaml, 'ingress')
 
     # 分割出转发的后端服务名+服务端口
     def split_backend_service_and_port(self, service_port):
@@ -858,7 +865,7 @@ class Boot(YamlBoot):
                 #yaml["spec"]["clusterIP"] = None # wrong: 输出为 clusterIP: null, k8s不认
                 yaml["spec"]["clusterIP"] = 'None' # 输出为 clusterIP: None, k8s认
             yamls.append(yaml)
-        self.save_yaml(yamls, '-svc.yml')
+        self.save_yaml(yamls, 'svc')
 
     # 服务类型对服务名后缀的映射
     service_type2name_postfix = {
