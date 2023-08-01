@@ -268,8 +268,13 @@ containers:
 
 18. initContainers：设置初始化容器，用于生成资源 pod / ReplicationController / ReplicaSet / DaemonSet / StatefulSet / Deployment / Job / Cronjob / HorizontalPodAutoscaler 文件中的 `spec.initContainers` 元素
 ```yaml
-initContainers: 
-    # 参数跟 containers 动作一样
+initContainers:
+  # 参数跟 containers 动作一样
+  init:
+    #image: busybox # 镜像可省，默认为busybox
+    command: chmod 0777 /usr/share/filebeat/data
+    volumes:
+      - /data/filebeat:/usr/share/filebeat/data
 ```
 
 19. pod：生成 pod 资源
@@ -286,6 +291,8 @@ deploy: 1
 
 # 更详细的参数
 deploy:
+    #hostname: nginx # 设置pod的主机名
+    #hostname:  # 设置pod的主机名，如果不赋值，则默认取app名
     replicas: 2 # 副本数
     nodeSelector: # 节点选择: dict形式
       kubernetes.io/os: linux

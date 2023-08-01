@@ -82,6 +82,8 @@
 #        replicas: 1
 #    - pod:
     - deploy:
+        #hostname: nginx # 设置pod的主机名
+        hostname:  # 设置pod的主机名，如果不赋值，则默认取app名
         replicas: 2 # 副本数
         nodeSelector: # 节点选择: dict形式
           kubernetes.io/os: linux
