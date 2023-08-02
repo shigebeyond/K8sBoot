@@ -1,0 +1,28 @@
+# http://www.manongjc.com/detail/64-fzkltaokjomurjb.html
+- app(etcd):
+    - initContainers:
+        init:
+          command: chmod 0777 /bitnami/etcd/data
+          volumes:
+            - /data/etcd:/bitnami/etcd/data
+    - containers:
+        etcd:
+          image: bitnami/etcd:3.5.5
+          volumes:
+            - "/data/etcd:/bitnami/etcd/data"
+          env:
+            ALLOW_NONE_AUTHENTICATION: yes
+            ETCD_ADVERTISE_CLIENT_URLS: http://0.0.0.0:2379
+          ports:
+            - "2379:2379"
+            - "2380:2380"
+        etcdkeeper:
+          image: evildecay/etcdkeeper:v0.7.6
+          ports:
+            - "8080:8080:8080"
+    # 部署
+    - deploy:
+        hostname: etcd
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: hww-pc
