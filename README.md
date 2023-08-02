@@ -100,13 +100,20 @@ app(应用名):
         auther: shigebeyond
 ```
 
-3. print: 打印, 支持输出变量/函数; 
+3. cname：为外部域名设置别名，会生成 ExternalName 类型的 Service 资源
+```yaml
+cname:
+  baidu: www.baidu.com
+  sk: www.shikee.com
+```
+
+4. print: 打印, 支持输出变量/函数; 
 ```yaml
 # 调试打印
 print: "总申请数=${dyn_data.total_apply}, 剩余份数=${dyn_data.quantity_remain}"
 ```
 
-4. set_vars: 设置变量; 
+5. set_vars: 设置变量; 
 ```yaml
 set_vars:
   name: shi
@@ -114,12 +121,12 @@ set_vars:
   birthday: 5-27
 ```
 
-5. print_vars: 打印所有变量; 
+6. print_vars: 打印所有变量; 
 ```yaml
 print_vars:
 ```
 
-6. for: 循环; 
+7. for: 循环; 
 for动作下包含一系列子步骤，表示循环执行这系列子步骤；变量`for_i`记录是第几次迭代（从1开始）,变量`for_v`记录是每次迭代的元素值（仅当是list类型的变量迭代时有效）
 ```yaml
 # 循环3次
@@ -140,7 +147,7 @@ for:
     print: $for_v
 ```
 
-7. once: 只执行一次，等价于 `for(1)`; 
+8. once: 只执行一次，等价于 `for(1)`; 
 once 结合 moveon_if，可以模拟 python 的 `if` 语法效果
 ```yaml
 once:
@@ -149,19 +156,19 @@ once:
     print: $for_v
 ```
 
-8. break_if: 满足条件则跳出循环; 
+9. break_if: 满足条件则跳出循环; 
 只能定义在for/once循环的子步骤中
 ```yaml
 break_if: for_i>2 # 条件表达式，python语法
 ```
 
-9. moveon_if: 满足条件则往下走，否则跳出循环; 
+10. moveon_if: 满足条件则往下走，否则跳出循环; 
 只能定义在for/once循环的子步骤中
 ```yaml
 moveon_if: for_i<=2 # 条件表达式，python语法
 ```
 
-10. if/else: 满足条件则执行if分支，否则执行else分支
+11. if/else: 满足条件则执行if分支，否则执行else分支
 ```yaml
 - set_vars:
     txt: '进入首页'
@@ -171,47 +178,59 @@ moveon_if: for_i<=2 # 条件表达式，python语法
     - print: '----- 执行else -----'
 ```
 
-11. include: 包含其他步骤文件，如记录公共的步骤，或记录配置数据(如用户名密码); 
+12. include: 包含其他步骤文件，如记录公共的步骤，或记录配置数据(如用户名密码); 
 ```yaml
 include: part-common.yml
 ```
 
 ### 8.2 app作用域下的子动作
-以下的动作，必须声明在app动作的子步骤中，动作的参数支持传递变量
+以下的动作，必须声明在app动作的子步骤中，动作的参数支持传递变量;
 
-12. labels：设置应用标签
+这种设计隐藏了k8s资源定义规范: 
+```
+1 一般资源都需要放到app作用域下, 即资源的label=app名, 代表一组资源组成了一个app。
+一般资源是指: config/secret/pod/rc/rs/ds/sts/deploy/service/job/cronjob/hpa/ingress/svc，以应用作为管理粒度。
+2 一般资源的资源名=app名, 除了NodePort类型的service资源名=app名-np
+```
+
+13. labels：设置应用标签
 ```yaml
 labels: 
     env: prod
     env2: $env # 支持传递变量
 ```
 
-13. config：以键值对的方式来设置 Config 资源
+14. config：以键值对的方式来设置 Config 资源
 ```yaml
 config:
     auther: shigebeyond
 ```
 
-14. config_from_files：以文件内容的方式来设置 Config 资源，在挂载configmap时items默认填充用config_from_files()写入的key
+15. config_from_files：以文件内容的方式来设置 Config 资源，在挂载configmap时items默认填充用config_from_files()写入的key
 ```yaml
-config_from_files: # 配置文件
+# 读配置文件内容作为配置项
+- config_from_files: ./default.conf # 单个文件, 文件名作为配置名, 文件内容作为配置值
+- config_from_files: ./conf/ # 目录, 遍历目录下的所有文件作为配置项
+- config_from_files: # 文件list, 遍历所有文件作为配置项
     - ./default.conf
-    - ./index.php
+    - ./index.html
+- config_from_files: # 文件dict，key是配置名，value是文件路径
+    default.conf: ./default.conf
 ```
 
-15. secret：以键值对的方式来设置 Secret 资源
+16. secret：以键值对的方式来设置 Secret 资源
 ```yaml
 secret:
     auther: c2hpZ2ViZXlvbmQK
 ```
 
-16. secret_files：以文件内容的方式来设置 Secret 资源，在挂载secret时items默认填充用secret_files()写入的key
+17. secret_files：以文件内容的方式来设置 Secret 资源，在挂载secret时items默认填充用secret_files()写入的key
 ```yaml
 config_from_files: # secret文件
     - ./admin.conf
 ```
 
-17. containers：设置容器，用于生成资源 pod / ReplicationController / ReplicaSet / DaemonSet / StatefulSet / Deployment / Job / Cronjob / HorizontalPodAutoscaler 文件中的 `spec.containers` 元素
+18. containers：设置容器，用于生成资源 pod / ReplicationController / ReplicaSet / DaemonSet / StatefulSet / Deployment / Job / Cronjob / HorizontalPodAutoscaler 文件中的 `spec.containers` 元素
 ```yaml
 containers:
     nginx: # 定义多个容器, dict形式, 键是容器名, 值是容器配置
@@ -266,7 +285,7 @@ containers:
         memory: 50Mi
 ```
 
-18. initContainers：设置初始化容器，用于生成资源 pod / ReplicationController / ReplicaSet / DaemonSet / StatefulSet / Deployment / Job / Cronjob / HorizontalPodAutoscaler 文件中的 `spec.initContainers` 元素
+19. initContainers：设置初始化容器，用于生成资源 pod / ReplicationController / ReplicaSet / DaemonSet / StatefulSet / Deployment / Job / Cronjob / HorizontalPodAutoscaler 文件中的 `spec.initContainers` 元素
 ```yaml
 initContainers:
   # 参数跟 containers 动作一样
@@ -277,12 +296,12 @@ initContainers:
       - /data/filebeat:/usr/share/filebeat/data
 ```
 
-19. pod：生成 pod 资源
+20. pod：生成 pod 资源
 ```yaml
 pod:
 ```
 
-20. deploy：生成 Deployment 资源
+21. deploy：生成 Deployment 资源
 ```yaml
 deploy:
     replicas: 1 # 副本数
@@ -321,7 +340,7 @@ deploy:
       - node-role.kubernetes.io/control-plane:NoSchedule
 ```
 
-21. rc：生成 ReplicationController 资源
+22. rc：生成 ReplicationController 资源
 ```yaml
 rc:
     replicas: 1 # 副本数
@@ -330,7 +349,7 @@ rc: 1
 # 更详细的参数：参考 deploy 动作
 ```
 
-22. rs：生成 ReplicaSet 资源
+23. rs：生成 ReplicaSet 资源
 ```yaml
 rs:
     replicas: 1 # 副本数
@@ -339,13 +358,13 @@ rs: 1
 # 更详细的参数：参考 deploy 动作
 ```
 
-23. ds：生成 DaemonSet 资源
+24. ds：生成 DaemonSet 资源
 ```yaml
 ds:
 # 更详细的参数：参考 deploy 动作
 ```
 
-24. sts：生成 StatefulSet 资源
+25. sts：生成 StatefulSet 资源
 ```yaml
 sts:
     replicas: 1 # 副本数
@@ -354,7 +373,7 @@ sts: 1
 # 更详细的参数：参考 deploy 动作
 ```
 
-25. job：生成 Job 资源:
+26. job：生成 Job 资源:
 完整写法
 ```yaml
 - app(counter):
@@ -382,7 +401,7 @@ sts: 1
         command: 'for i in 9 8 7 6 5 4 3 2 1; do echo \$i;sleep 2;done'
 ```
 
-26. cronjob：生成 Cronjob 资源:
+27. cronjob：生成 Cronjob 资源:
 完整写法
 ```yaml
 - app(clock):
@@ -404,7 +423,7 @@ sts: 1
         command: 'date'
 ```
 
-27. hpa：生成 HorizontalPodAutoscaler 资源
+28. hpa：生成 HorizontalPodAutoscaler 资源
 ```yaml
 hpa:
     by: # 扩容的度量指标
@@ -414,7 +433,7 @@ hpa:
       replicas: 1~3 # 副本数的最小值+最大值，应用在hpa
 ```
 
-28. ingress：生成 Ingress 资源
+29. ingress：生成 Ingress 资源
 ```yaml
 ingress:
     # url对转发的(服务)端口映射，支持字典树形式

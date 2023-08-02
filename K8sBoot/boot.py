@@ -128,9 +128,14 @@ class Boot(YamlBoot):
         :param data 资源数据
         :param res 资源类型，如deploy/ds
         '''
-        # 检查app名
-        if self._app is None:
-            raise Exception(f"生成{res}资源文件失败: 没有指定应用")
+        # 拼接文件名
+        if res == 'ns' or res == 'cname':
+            file = f"{res}.yml"
+        else:
+            # 检查app名
+            if self._app is None:
+                raise Exception(f"生成{res}资源文件失败: 没有指定应用")
+            file = f"{self._app}-{res}.yml"
         # 转yaml
         if isinstance(data, list): # 多个资源
             data = list(map(yaml.dump, data))
@@ -141,7 +146,7 @@ class Boot(YamlBoot):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         # 保存文件
-        file = os.path.join(self.output_dir, f"{self._app}-{res}.yml")
+        file = os.path.join(self.output_dir, file)
         write_file(file, data)
 
     def print_apply_cmd(self):
@@ -194,7 +199,9 @@ class Boot(YamlBoot):
         yaml = {
             "apiVersion": "v1",
             "kind": "Namespace",
-            "metadata": self._ns,
+            "metadata": {
+                "name": self._ns
+            },
         }
         self.save_yaml(yaml, 'ns')
 
@@ -833,6 +840,28 @@ class Boot(YamlBoot):
         # 获得转发的服务名
         service_name = self.get_service_name_by_port(service_port, app)
         return service_name, service_port
+
+    def cname(self, svc2external):
+        '''
+        为外部域名设置别名，会生成 ExternalName 类型的 Service 资源
+        :param svc2external 内部服务名对外部域名的映射
+        '''
+        yamls = []
+        for svc, external in svc2external.items():
+            meta = { "name": svc }
+            if self._ns:
+                meta['namespace'] = self._ns
+            yaml = {
+                "apiVersion": "apps/v1",
+                "kind": "Service",
+                "metadata": meta,
+                "spec": {
+                    "type": "ExternalName",
+                    "externalName": external
+                }
+            }
+            yamls.append(yaml)
+        self.save_yaml(yamls, 'cname')
 
     def service(self):
         '''
