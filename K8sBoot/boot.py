@@ -98,9 +98,9 @@ class Boot(YamlBoot):
 
         # 清空app相关的属性
     def clear_app(self):
-        self._app = ''  # 应用名
-        self._app_as_hostname = False # 应用名作为pod的主机名
+        self._app = None  # 应用名
         set_var('app', None)
+        self._app_as_hostname = False # 应用名作为pod的主机名
         self._labels = {}  # 记录标签
         self._config_data = {}  # 记录设置过的配置
         self._config_file_keys = [] # 记录文件类型的key
@@ -196,6 +196,7 @@ class Boot(YamlBoot):
         if self._ns != '':
             raise Exception('已设置过命名空间, 仅支持唯一的命名空间')
         self._ns = name
+        set_var('ns', name)
         yaml = {
             "apiVersion": "v1",
             "kind": "Namespace",
@@ -216,6 +217,7 @@ class Boot(YamlBoot):
             self._app_as_hostname = True
             name = name[1:]
         self._app = name
+        set_var('app', name)
         self._labels = {
             'app': self._app
         }

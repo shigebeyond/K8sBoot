@@ -17,6 +17,8 @@
           image: nginx # 镜像
           env: # 以dict方式设置环境变量
             TZ: Asia/Shanghai
+            # 引用app名
+            APP_NAME: $app
             # 引用pod信息
             POD_NAME: ${ref_pod_field(metadata.name)}
             POD_NAMESPACE: ${ref_pod_field(metadata.namespace)}
@@ -84,7 +86,7 @@
     - deploy:
         #hostname: nginx # 设置pod的主机名
         hostname:  # 设置pod的主机名，如果不赋值，则默认取app名
-        replicas: 2 # 副本数
+        replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
           kubernetes.io/os: linux
         nodeAffinity:
