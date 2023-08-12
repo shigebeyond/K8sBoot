@@ -17,7 +17,8 @@ k8s太复杂了，特别是资源定义文件，学习与使用成本很高，�
 动作代表k8s的某个资源定义，如config/rc/rs/deploy等等;
 2. 支持类似python`for`/`if`/`break`语义的步骤动作，灵活适应各种场景
 3. 支持`include`引用其他的yaml文件，以便解耦与复用
-4. yaml的代码量大大缩小，K8sBoot的yaml代码量相当于k8s资源文件的1/4~1/10
+4. 增加了`应用`(即`app`)的概念，为k8s资源定义增加了面向应用编程的方式，更加切合应用维度的部署与管理需求
+5. yaml的代码量大大缩小，K8sBoot的yaml代码量相当于k8s资源文件的1/4~1/10
 
 ## 3 搭配k8s命令简化框架，使用更简单
 [k8scmd](https://github.com/shigebeyond/k8scmd)：对k8s的复杂命令做了大量简化

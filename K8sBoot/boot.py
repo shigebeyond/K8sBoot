@@ -192,11 +192,15 @@ class Boot(YamlBoot):
         return node2labels
 
     # 设置与生成命名空间
+    @replace_var_on_params
     def ns(self, name):
         if self._ns != '':
             raise Exception('已设置过命名空间, 仅支持唯一的命名空间')
         self._ns = name
         set_var('ns', name)
+        # default的命名空间就不用生成了， 防止改了默认的lables或annotations
+        if name == 'default':
+            return
         yaml = {
             "apiVersion": "v1",
             "kind": "Namespace",
