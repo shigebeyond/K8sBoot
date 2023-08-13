@@ -836,13 +836,18 @@ class Boot(YamlBoot):
         self.save_yaml(yaml, 'ingress')
 
     # 分割出转发的后端服务名+服务端口
-    def split_backend_service_and_port(self, service_port):
+    def split_backend_service_and_port(self, app_and_service_port):
         # 获得转发的应用名
-        if isinstance(service_port, str) and ':' in service_port:  # 有指定应用名
-            app, service_port = service_port.split(':')
+        if isinstance(app_and_service_port, str) and ':' in app_and_service_port:  # 有应用名+端口
+            app, service_port = app_and_service_port.split(':')
             service_port = int(service_port)
-        else:  # 无指定应用名，则为当前应用
+        elif isinstance(app_and_service_port, int):  # 有端口无应用名，则为当前应用
             app = self._app
+            service_port = app_and_service_port
+        else: # 有应用名无端口，则取应用的第一个端口
+            app = app_and_service_port
+            first_port = self.app_ports(app)[0]
+            service_port = self.build_service_port(first_port)["port"]
         # 获得转发的服务名
         service_name = self.get_service_name_by_port(service_port, app)
         return service_name, service_port

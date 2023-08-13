@@ -440,10 +440,13 @@ ingress:
     # url对转发的(服务)端口映射，支持字典树形式
     http://k8s.com/a: 80 # 当前应用的服务端口
     http://k8s.com/b: nginx:80 # 指定应用的服务端口
+    http://k8s.com/c: nginx # 指定应用的第一个服务端口
     # 等价于
     http://k8s.com:
-      /c: 80 # 当前应用的服务端口
+      /a: 80 # 当前应用的服务端口
       /d: nginx:80 # 指定应用的服务端口
+      /c: nginx # 指定应用的第一个服务端口
+      
     # 路径重写，如果是/api/hello，则去掉前缀api，访问服务的/hello，网关一般这么搞
     http://k8s.com/api(/|$)(.*): 80  
 ```
