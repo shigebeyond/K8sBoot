@@ -1,0 +1,17 @@
+# curl example-test.k8s.com
+- app(example-test):
+  - cname:
+      example-test: jkmvc-example.test.svc.cluster.local
+  - ingress:
+      # url对转发的(服务)端口映射，支持字典树形式
+      example-test.k8s.com:
+          /: example-test:8080 # 指定cname服务端口
+
+# 端口8080 填在 canme或ingress上都可以，譬如
+#- app(example-test):
+#  - cname:
+#      example-test: jkmvc-example.test.svc.cluster.local:8080
+#  - ingress:
+#      # url对转发的(服务)端口映射，支持字典树形式
+#      example-test.k8s.com:
+#          /: example-test # 指定cname服务端口

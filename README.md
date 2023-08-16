@@ -104,8 +104,21 @@ app(应用名):
 3. cname：为外部域名设置别名，会生成 ExternalName 类型的 Service 资源
 ```yaml
 cname:
-  baidu: www.baidu.com
+  # 别名: 外部域名
+  baidu: www.baidu.com # 外部域名
   sk: www.shikee.com
+  example-test: jkmvc-example.test.svc.cluster.local:8080 # 其他命名空间中的服务, 带端口
+```
+cname可结合ingress
+```yaml
+# 自己配host, 测试: curl example-test.k8s.com
+- app(example-test):
+  - cname:
+      example-test: jkmvc-example.test.svc.cluster.local # 其他命名空间中的服务, 不带端口
+  - ingress:
+      # url对转发的(服务)端口映射，支持字典树形式
+      example-test.k8s.com:
+          /: example-test:8080 # 指定cname服务端口
 ```
 
 4. print: 打印, 支持输出变量/函数; 

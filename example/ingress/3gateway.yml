@@ -4,5 +4,6 @@
         k8s.com:
             /hello: hello:8000 # 指定应用的服务端口
             /demo: demo:8001
+        k9s.com:
             /hello2: hello # 指定应用的第一个服务端口
             /demo2: demo

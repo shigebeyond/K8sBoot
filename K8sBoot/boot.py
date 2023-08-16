@@ -68,6 +68,7 @@ class Boot(YamlBoot):
             'ingress': self.ingress,
             'initContainers': self.initContainers,
             'containers': self.containers,
+            'cname': self.cname,
         }
         self.add_actions(actions)
         # 自定义函数
@@ -94,6 +95,7 @@ class Boot(YamlBoot):
         self._containers = [] # 记录处理过的容器
         self._volumes = {} # 记录容器中的卷，key是卷名，value是卷信息
         self._service_type2ports = {} # 记录service类型对端口映射
+        self._cname_ports = {} # 记录cname(externalName Service)的端口
         self._is_sts = False # 是否用 statefulset 来部署
 
         # 清空app相关的属性
@@ -110,6 +112,7 @@ class Boot(YamlBoot):
         self._containers = []  # 记录处理过的容器
         self._volumes = {}  # 记录容器中的卷，key是卷名，value是卷信息
         self._service_type2ports = {}  # 记service类型对端口映射
+        self._cname_ports = {}  # 记录cname(externalName Service)的端口
         self._is_sts = False  # 是否用 statefulset 来部署
 
     # 获得指定app的端口映射
@@ -220,6 +223,8 @@ class Boot(YamlBoot):
         if name.startswith('@'):
             self._app_as_hostname = True
             name = name[1:]
+        # app名可带参数
+        name = replace_var(name)
         self._app = name
         set_var('app', name)
         self._labels = {
@@ -724,6 +729,8 @@ class Boot(YamlBoot):
             if isinstance(value, dict): # 如果当前节点仍然是字典类型，则进行递归
                 self.fix_trie_paths(value, current_path, ret)
             else: # 如果当前节点是叶子节点，则将完整路径添加到结果列表中
+                # 一般dict中的key是不做变量替换，但此处的url要
+                current_path = replace_var(current_path)
                 if not parse.urlparse(current_path).scheme: # 默认协议是http
                     current_path = 'http://' + current_path
                 ret[current_path] = value
@@ -775,7 +782,8 @@ class Boot(YamlBoot):
         for scheme_host, urls in host2urls:
             # 遍历某域名下的url，生成转发规则
             paths = []
-            for url, service_port in url2port.items():
+            for url in urls:
+                service_port = url2port[url]
                 url = parse.urlparse(url)
                 # 检查有重写路径，如 http://www.k8s.com/api(/|$)(.*)
                 if '(' in url.path:
@@ -846,10 +854,16 @@ class Boot(YamlBoot):
             service_port = app_and_service_port
         else: # 有应用名无端口，则取应用的第一个端口
             app = app_and_service_port
-            first_port = self.app_ports(app)[0]
-            service_port = self.build_service_port(first_port)["port"]
+            if app in self._cname_ports:  # cname为externalName Service, 自身就是服务名
+                service_port = int(self._cname_ports[app][0])
+            else:
+                first_port = self.app_ports(app)[0]
+                service_port = self.build_service_port(first_port)["port"]
         # 获得转发的服务名
-        service_name = self.get_service_name_by_port(service_port, app)
+        if app in self._cname_ports: # cname为externalName Service, 自身就是服务名
+            service_name = app
+        else:
+            service_name = self.get_service_name_by_port(service_port, app)
         return service_name, service_port
 
     def cname(self, svc2external):
@@ -862,13 +876,21 @@ class Boot(YamlBoot):
             meta = { "name": svc }
             if self._ns:
                 meta['namespace'] = self._ns
+
+            ports = []
+            if ':' in external:
+                external, ports = external.split(':', 1)
+                ports = ports.split(',')
+            self._cname_ports[svc] = ports
+
             yaml = {
-                "apiVersion": "apps/v1",
+                "apiVersion": "v1",
                 "kind": "Service",
                 "metadata": meta,
                 "spec": {
                     "type": "ExternalName",
-                    "externalName": external
+                    "externalName": external,
+                    "ports": [{'port': int(p)} for p in ports]
                 }
             }
             yamls.append(yaml)
