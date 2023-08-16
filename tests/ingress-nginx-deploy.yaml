@@ -649,6 +649,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/component: admission-webhook
     spec:
+      hostNetwork: true
       containers:
         - name: create
           image: anjia0532/google-containers.ingress-nginx.kube-webhook-certgen:v1.1.1
@@ -701,6 +702,7 @@ spec:
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/component: admission-webhook
     spec:
+      hostNetwork: true
       containers:
         - name: patch
           image: anjia0532/google-containers.ingress-nginx.kube-webhook-certgen:v1.1.1
