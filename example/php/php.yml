@@ -22,4 +22,4 @@
             - config://index.php:/www/index.php # 必须的，否则响应报 file not found
     # 部署
     - deploy:
-        replicas: 2 # 副本数
+        replicas: 1 # 副本数

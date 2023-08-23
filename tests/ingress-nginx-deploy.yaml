@@ -82,6 +82,7 @@ metadata:
   namespace: ingress-nginx
 data:
   allow-snippet-annotations: 'true'
+  enable-underscores-in-headers: "true" # 传递header
 ---
 # Source: ingress-nginx/templates/clusterrole.yaml
 apiVersion: rbac.authorization.k8s.io/v1

@@ -32,6 +32,7 @@
             AUTHOR: ${ref_config(auther)}
           env_from: # 从当前应用的 config 或 secret 资源中导入环境变量
             - config
+            #- config:xxx # 引用其他应用xxx的配置
             #- secret
           ports: # 端口映射
             - 80 # 容器端口
@@ -44,6 +45,7 @@
             # nginx配置文件挂载： https://blog.csdn.net/weixin_47415962/article/details/116003059
             - config://:/www # 挂载configmap所有key到目录
             - config://default.conf:/etc/nginx/conf.d/default.conf # 挂载configmap单个key到文件
+            #- config://xxx/default.conf:/etc/nginx/conf.d/default.conf -- 挂载其他应用xxx的configmap
             - downwardAPI://:/etc/podinfo # 将元数据labels和annotations以文件的形式挂载到目录
             - downwardAPI://labels:/etc/podinfo2/labels.properties # 将元数据labels挂载为文件
             #- pvc://pvc1:/usr/share/nginx/html # 将pvc挂载为目录

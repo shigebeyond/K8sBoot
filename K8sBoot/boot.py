@@ -14,6 +14,7 @@ from pyutilb.file import *
 from pyutilb.cmd import *
 from pyutilb import YamlBoot, BreakException
 from pyutilb.log import log
+from dotenv import dotenv_values
 
 # 在动作参数上进行变量替换，这样支持参数类型为str或dict或list等
 def replace_var_on_params(func):
@@ -690,11 +691,13 @@ class Boot(YamlBoot):
                       tolerations 容忍
                       activeDeadlineSeconds 表示 Pod 可以运行的最长时间，达到设置的该值后，Pod 会自动停止。
                       hostname pod的主机名, 如果设置的值为空, 则取app名
+                      hostAliases或hosts ip对域名的映射，如 192.168.62.209: kafka-broker
         :param restartPolicy 重启策略，默认为Always，对job为Never
         :return
         '''
         spec = {
             "activeDeadlineSeconds": option.get('activeDeadlineSeconds'),
+            "hostAliases": self.build_hosts(option.get('hostAliases') or option.get('hosts')),
             "initContainers": self._init_containers,
             "containers": self._containers,
             "restartPolicy": restartPolicy,
@@ -734,6 +737,27 @@ class Boot(YamlBoot):
                 if not parse.urlparse(current_path).scheme: # 默认协议是http
                     current_path = 'http://' + current_path
                 ret[current_path] = value
+        return ret
+
+    def build_hosts(self, ip2domains):
+        '''
+        构建hostAlias（域名解析） 参考 https://blog.csdn.net/qq_20042935/article/details/127448780
+        :param ip2domains ip对域名的映射
+              如 192.168.62.209: kafka-broker
+                192.168.62.209:
+                    - kafka-broker
+        '''
+        if ip2domains is None or len(ip2domains) == 0:
+            return None
+        ret = []
+        for ip, domains in ip2domains.items():
+            if isinstance(domains, str):
+                domains = [domains]
+            item = {
+                'ip': ip,
+                'hostnames': domains
+            }
+            ret.append(item)
         return ret
 
     @replace_var_on_params
@@ -1041,11 +1065,14 @@ class Boot(YamlBoot):
         # 拿到容器名，才能对option替换变量
         if not gen_by_job:
             option = replace_var(option, False)
+        env = self.build_env(get_and_del_dict_item(option, 'env')) + self.build_env_file(get_and_del_dict_item(option, 'env_file'))
+        if not env:
+            env = None
         ret = {
             "name": name,
             "image": get_and_del_dict_item(option, 'image', 'busybox'),
             "imagePullPolicy": get_and_del_dict_item(option, 'imagePullPolicy', "IfNotPresent"),
-            "env": self.build_env(get_and_del_dict_item(option, 'env')),
+            "env": env,
             "envFrom": self.build_env_from(get_and_del_dict_item(option, 'env_from')),
             "command": self.fix_command(get_and_del_dict_item(option, 'command')),
             "lifecycle": self.build_lifecycle(get_and_del_dict_item(option, 'postStart'), get_and_del_dict_item(option, 'preStop')),
@@ -1329,9 +1356,13 @@ class Boot(YamlBoot):
             }
         # configmap: https://blog.csdn.net/weixin_45880055/article/details/117590045
         if protocol == 'config':
+            if '/' in host_path:
+                name, host_path = host_path.split('/', 1)
+            else:
+                name = self._app
             return {
                 'configMap': {
-                    'name': self._app,
+                    'name': name,
                     # 指定items(配置挂载的key)
                     # items的作用是 1指定key挂载到不同名到文件上 2过滤要挂载的key，否则挂载全部key
                     # self._config_file_keys默认挂载的文件类型的key，仅当host_path没指定时用到
@@ -1340,9 +1371,13 @@ class Boot(YamlBoot):
             }
         # secret: https://www.cnblogs.com/litzhiai/p/11950273.html
         if protocol == 'secret':
+            if '/' in host_path:
+                name, host_path = host_path.split('/', 1)
+            else:
+                name = self._app
             return {
                 'secret': {
-                    'secretName': host_path,
+                    'secretName': name,
                     'items': self.build_config_volume_items(host_path or self._secret_file_keys) # 跟config实现一样
                 }
             }
@@ -1398,7 +1433,7 @@ class Boot(YamlBoot):
             return
 
         # 2 有指定key
-        # 2.1 根据key拼接item
+        # 根据key拼接item
         if isinstance(keys, str): # 单个key
             keys = [keys]
         return [{'key': key, 'path': key} for key in keys]
@@ -1415,6 +1450,7 @@ class Boot(YamlBoot):
                     nfs://192.168.159.14/data:/mnt -- 挂载nfs
                     config://:/etc/nginx/conf.d -- 将configmap挂载为目录
                     config://default.conf:/etc/nginx/conf.d/default.conf -- 将configmap中key=default.conf的单个配置项挂载为文件，不同的key写不同的行
+                    config://xxx/default.conf:/etc/nginx/conf.d/default.conf -- 将其他应用xxx的configmap的配置项挂载为文件
                     downwardAPI://:/etc/podinfo -- 将元数据labels和annotations以文件的形式挂载到目录
                     downwardAPI://labels:/etc/podinfo/labels.properties -- 将元数据labels挂载为文件
                     pvc://pvc1:/usr/share/nginx/html -- 将pvc挂载为目录
@@ -1648,10 +1684,41 @@ class Boot(YamlBoot):
             }
         }
 
+    def build_env_file(self, files):
+        '''
+        根据.env文件构建容器中的环境变量
+        :param files .env文件list或dict或目录
+                  list类型： 元素是文件路径
+                  str类型： 目录/文件路径
+        '''
+        if files is None or len(files) == 0:
+            return []
+
+        # 1 str: 目录/文件转list
+        if isinstance(files, str):
+            path = files
+            if not os.path.exists(path):
+                raise Exception(f"env_file参数[{path}]因是str类型而被认定为目录或文件，但目录或文件不存在")
+            if os.path.isdir(path):  # 目录
+                files = [os.path.join(path, f) for f in os.listdir(path)]
+            else:  # 文件
+                files = [path]
+
+        # 2 list
+        if not isinstance(files, list):
+            raise Exception(f"env_file参数[{path}]非list类型")
+
+        # 收集.env文件中的变量
+        env = {}
+        for file in files:
+            vars = dotenv_values(file) # 读.env文件中的变量
+            env.update(vars)
+        return self.build_env(env)
+
     # 构建容器中的环境变量
     def build_env(self, env):
         if env is None or len(env) == 0:
-            return None
+            return []
 
         ret = []
         for key, val in env.items():
@@ -1669,7 +1736,10 @@ class Boot(YamlBoot):
         '''
         构建容器中的环境变量
            参考 https://blog.csdn.net/u012734723/article/details/122906200
-        :param types 仅支持 config / secret
+        :param types 多行，格式为
+                    config -- 引用当前应用的配置
+                    config:xxx -- 引用其他应用xxx的配置
+                    secret -- 引用当前应用的secret
         '''
         if types is None or len(types) == 0:
             return None
@@ -1679,13 +1749,19 @@ class Boot(YamlBoot):
         ret = []
         for val in types:
             if isinstance(val, str):
-                if val == 'config':
-                    val = "configMapRef"
+                # 分割
+                if ':' in val:
+                    type, name = val.split(':', 1)
                 else:
-                    val = "secretRef"
+                    type = val
+                    name = self._app
+                if type == 'config':
+                    type = "configMapRef"
+                else:
+                    type = "secretRef"
                 item = {
-                    val: {
-                        "name": self._app
+                    type: {
+                        "name": name
                     }
                 }
             ret.append(item)
