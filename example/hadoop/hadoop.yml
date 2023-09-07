@@ -1,3 +1,4 @@
+# https://blog.csdn.net/cobracanary/article/details/126246695
 - app(hadoop):
     - config: ${read_env(./hadoop.env)} # 读配置
     - containers:

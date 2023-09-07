@@ -1,0 +1,22 @@
+# https://blog.csdn.net/oschina_41731918/article/details/124692842
+- set_vars:
+    serverip: 192.168.0.182
+- app(gitlab):
+    - containers:
+        gitlab:
+          image: 'gitlab/gitlab-ce:14.10.2-ce.0'
+          env:
+            TZ: 'Asia/Shanghai'
+            GITLAB_OMNIBUS_CONFIG: |
+              external_url 'http://$serverip:3000'  # web站点访问地址
+              gitlab_rails['gitlab_shell_ssh_port'] = 2222
+          ports:
+            - '3000:3000' # 注意宿主机和容器内部的端口要一致，否则external_url无法访问
+            - '8443:443'
+            - '2222:22'
+          volumes:
+            - /data/gitlab/config:/etc/gitlab
+            - /data/gitlab/data:/var/opt/gitlab
+            - /data/gitlab/logs:/var/log/gitlab
+    # 部署
+    - deploy: 1
