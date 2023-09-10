@@ -1,6 +1,8 @@
 # https://blog.csdn.net/cobracanary/article/details/126246695
 - app(spark):
     - containers:
+        # 1主2从
+        # 主
         master:
           image: bitnami/spark:3.2.1
           env:
@@ -14,7 +16,8 @@
             - '7077:7077' # spark UI
           volumes:
             - /data/spark/python:/python # 映射/python目录，用于存放pyspark代码，方便运行
-
+            - /data/spark/input:/input
+        # 从
         worker1:
           image: bitnami/spark:3.2.1
           env:
@@ -26,7 +29,7 @@
             SPARK_RPC_ENCRYPTION_ENABLED: no
             SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: no
             SPARK_SSL_ENABLED: no
-
+        # 从
         worker2:
           image: bitnami/spark:3.2.1
           env:
@@ -41,6 +44,8 @@
     # 部署
     - deploy:
         replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: hww-pc
         hosts: # 域名解析
           127.0.0.1:
               - master

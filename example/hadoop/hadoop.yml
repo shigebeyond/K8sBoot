@@ -49,6 +49,8 @@
     # 部署
     - deploy:
         replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: hww-pc
         hosts: # 域名解析
           127.0.0.1:
               - namenode
