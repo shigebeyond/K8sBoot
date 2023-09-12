@@ -22,6 +22,7 @@
             - /data/spark/input:/input
     # 部署
     - deploy:
+        hostname:
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
           kubernetes.io/hostname: $master_host
@@ -45,6 +46,7 @@
 #            - '8081:8081' # spark UI
     # 部署
     - deploy:
+        hostname:
         replicas: 2 # 副本数
 
 
