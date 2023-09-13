@@ -743,12 +743,23 @@ class Boot(YamlBoot):
         '''
         构建hostAlias（域名解析） 参考 https://blog.csdn.net/qq_20042935/article/details/127448780
         :param ip2domains ip对域名的映射
-              如 192.168.62.209: kafka-broker
-                192.168.62.209:
-                    - kafka-broker
+               dict类型，如 192.168.62.209: kafka-broker
+                           192.168.62.209:
+                                - kafka-broker
+               list类型(/etc/hosts格式)，如 - 192.168.62.209 kafka-broker
         '''
         if ip2domains is None or len(ip2domains) == 0:
             return None
+        # list转dict
+        if isinstance(ip2domains, list):
+            items = ip2domains
+            ip2domains = {}
+            for item in items:
+                ip, domain = re.split(' +', item, 1)
+                if ip not in ip2domains:
+                    ip2domains[ip] = []
+                ip2domains[ip].append(domain)
+        # 拼接hostAlias
         ret = []
         for ip, domains in ip2domains.items():
             if isinstance(domains, str):
