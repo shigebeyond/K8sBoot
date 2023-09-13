@@ -95,6 +95,7 @@ class Boot(YamlBoot):
         self._init_containers = None # 记录处理过的初始容器
         self._containers = [] # 记录处理过的容器
         self._volumes = {} # 记录容器中的卷，key是卷名，value是卷信息
+        self._all_ports = False # 是否映射宿主机所有端口，即hostNetwork=true
         self._service_type2ports = {} # 记录service类型对端口映射
         self._cname_ports = {} # 记录cname(externalName Service)的端口
         self._is_sts = False # 是否用 statefulset 来部署
@@ -112,6 +113,7 @@ class Boot(YamlBoot):
         self._init_containers = None  # 记录处理过的初始容器
         self._containers = []  # 记录处理过的容器
         self._volumes = {}  # 记录容器中的卷，key是卷名，value是卷信息
+        self._all_ports = False  # 是否映射宿主机所有端口，即hostNetwork=true
         self._service_type2ports = {}  # 记service类型对端口映射
         self._cname_ports = {}  # 记录cname(externalName Service)的端口
         self._is_sts = False  # 是否用 statefulset 来部署
@@ -708,7 +710,7 @@ class Boot(YamlBoot):
         }
         del_dict_none_item(spec)
         # 处理hostNetwork，要加上dnsPolicy
-        host_network = option.get('hostNetwork', False)
+        host_network = option.get('hostNetwork', False) or self._all_ports
         if host_network:
             spec["hostNetwork"] = host_network
             spec["dnsPolicy"] = option.get("dnsPolicy", "ClusterFirstWithHostNet") # 使用k8s DNS内部域名解析，如果不加，pod默认使用所在宿主主机使用的DNS，这样会导致容器内不能通过service name访问k8s集群中其他POD
@@ -1076,6 +1078,7 @@ class Boot(YamlBoot):
         # 拿到容器名，才能对option替换变量
         if not gen_by_job:
             option = replace_var(option, False)
+        # 环境变量
         env = self.build_env(get_and_del_dict_item(option, 'env')) + self.build_env_file(get_and_del_dict_item(option, 'env_file'))
         if not env:
             env = None
@@ -1268,6 +1271,9 @@ class Boot(YamlBoot):
         :param ports 多行，格式为 宿主机端口:服务端口:容器端口
         '''
         if ports is None or len(ports) == 0:
+            return None
+        if ports == '*':
+            self._all_ports = True # 映射宿主机所有端口，即hostNetwork=true
             return None
         # ports的格式是多行的： 宿主机端口:服务端口:容器端口
         if isinstance(ports, str):
