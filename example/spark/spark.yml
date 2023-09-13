@@ -10,8 +10,7 @@
           image: bitnami/spark # spark版本是3.2.0
           env:
             SPARK_MODE: master
-            #SPARK_MASTER_HOST: $master_ip
-            SPARK_MASTER_HOST: spark-master
+            SPARK_MASTER_HOST: $master_ip
             SPARK_MASTER_PORT: 7077
             SPARK_RPC_AUTHENTICATION_ENABLED: no
             SPARK_RPC_ENCRYPTION_ENABLED: no
@@ -31,8 +30,6 @@
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
           kubernetes.io/hostname: $master_host
-        hosts: # 域名解析
-          - $master_ip spark-master # ip 域名
 # 从
 - app(spark-worker):
     - containers:
@@ -40,8 +37,6 @@
           image: bitnami/spark
           env:
             SPARK_MODE: worker
-            # bug: worker pod居然不能解析域名 spark-master-np.default => 暂时先用ip
-            #SPARK_MASTER_URL: spark://spark-master-np.default:7077
             SPARK_MASTER_URL: spark://$master_ip:7077
             SPARK_WORKER_PORT: 8081 # 显式指定ui端口
             SPARK_WORKER_MEMORY: 1G
@@ -58,7 +53,5 @@
     - deploy:
         hostname:
         replicas: 2 # 副本数
-        hosts: # 域名解析
-          - $master_ip spark-master # ip 域名
 
 
