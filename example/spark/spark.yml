@@ -1,7 +1,7 @@
 # https://blog.csdn.net/cobracanary/article/details/126246695
 - set_vars:
-    master_host: hww-pc
-    master_ip: 192.168.1.10
+    master_host: mac
+    master_ip: 192.168.62.209
 # 1主2从
 # 主
 - app(spark-master):
@@ -10,6 +10,9 @@
           image: bitnami/spark # spark版本是3.2.0
           env:
             SPARK_MODE: master
+            #SPARK_MASTER_HOST: $master_ip
+            SPARK_MASTER_HOST: spark-master
+            SPARK_MASTER_PORT: 7077
             SPARK_RPC_AUTHENTICATION_ENABLED: no
             SPARK_RPC_ENCRYPTION_ENABLED: no
             SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: no
@@ -17,6 +20,7 @@
           ports:
             - '8080:8080:8080' # spark UI
             - '7077:7077:7077' # 用于连接spark
+            - '4040:4040:4040' # job执行UI
           volumes:
             - /data/spark/python:/python # 映射/python目录，用于存放pyspark代码，方便运行
             - /data/spark/input:/input
@@ -36,17 +40,20 @@
             # bug: worker pod居然不能解析域名 spark-master-np.default => 暂时先用ip
             #SPARK_MASTER_URL: spark://spark-master-np.default:7077
             SPARK_MASTER_URL: spark://$master_ip:7077
+            SPARK_WORKER_PORT: 8081 # 显式指定ui端口
             SPARK_WORKER_MEMORY: 1G
             SPARK_WORKER_CORES: 1
             SPARK_RPC_AUTHENTICATION_ENABLED: no
             SPARK_RPC_ENCRYPTION_ENABLED: no
             SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: no
             SPARK_SSL_ENABLED: no
-#          ports:
-#            - '8081:8081' # spark UI
+          ports:
+            - '8081:8081' # spark UI
     # 部署
     - deploy:
         hostname:
         replicas: 2 # 副本数
+        hosts: # 域名解析
+          - $master_ip spark-master # ip 域名
 
 
