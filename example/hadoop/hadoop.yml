@@ -19,29 +19,21 @@
           image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
           volumes:
             - /data/hadoop/dfs/data:/hadoop/dfs/data
-          env:
-            SERVICE_PRECONDITION: "namenode:9870"
           env_from:
             - config
 
         resourcemanager:
           image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
-          env:
-            SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864"
           env_from:
             - config
 
         nodemanager:
           image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
-          env:
-            SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
           env_from:
             - config
 
         historyserver:
           image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
-          env:
-            SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
           volumes:
             - /data/hadoop/yarn/timeline:/hadoop/yarn/timeline
           env_from:
