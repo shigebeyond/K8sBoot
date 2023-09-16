@@ -83,6 +83,7 @@ class Boot(YamlBoot):
 
         self._ns = '' # 命名空间
         self.app2ports = {} # 记录每个app的容器端口映射，不会清空
+        self.app2port2service = {} # 记录每个app的端口对服务名映射，不会清空
 
         # app作用域的属性，跳出app时就清空
         self._app = '' # 应用名
@@ -941,17 +942,19 @@ class Boot(YamlBoot):
         if len(self.app_ports()) == 0:
             return
         yamls = []
-        for type, ports in self.build_service_type2ports():
+        type2ports = self.build_service_type2ports()
+        for type, ports in type2ports:
+            ports = list(ports)
             anns = {
                 "kube-router.io/service.scheduler": "lc" # 调度算法为least connection
             }
             yaml = {
                 "apiVersion": "v1",
                 "kind": "Service",
-                "metadata": self.build_metadata(self.build_service_name(type), anns),
+                "metadata": self.build_metadata(self.build_service_name(type, type2ports), anns),
                 "spec": {
                     "type": type,
-                    "ports": list(ports),
+                    "ports": ports,
                     "selector": self.build_labels()
                 },
                 "status":{
@@ -964,6 +967,10 @@ class Boot(YamlBoot):
                 #yaml["spec"]["clusterIP"] = None # wrong: 输出为 clusterIP: null, k8s不认
                 yaml["spec"]["clusterIP"] = 'None' # 输出为 clusterIP: None, k8s认
             yamls.append(yaml)
+
+        # 记录当前app的端口对服务名映射
+        self.record_port2service(type2ports)
+
         self.save_yaml(yamls, 'svc')
 
     # 服务类型对服务名后缀的映射
@@ -974,20 +981,28 @@ class Boot(YamlBoot):
     }
 
     # 构建服务名
-    def build_service_name(self, type, app = None):
+    def build_service_name(self, type, type2ports, app = None):
         if app is None: # 无需app名，用来获得服务名后缀
             app = ''
 
-        return app + self.service_type2name_postfix[type]
+        if 'ClusterIP' in type2ports:  # 有ClusterIP: service资源名=app名-类型后缀
+            service_name = app + self.service_type2name_postfix[type]
+        else:  # 无ClusterIP: service资源名=app名
+            service_name = app
+        return service_name
+
+    # 记录当前app的端口对服务名映射
+    def record_port2service(self, type2ports):
+        port2service = {}  # 记录当前app的端口对服务名映射
+        for type, ports in type2ports:
+            service = self.build_service_name(type, type2ports, self._app)
+            for port in ports:
+                port2service[port] = service # 端口->服务名
+        self.app2port2service[self._app] = port2service
 
     # 通过服务端口来获得服务名
     def get_service_name_by_port(self, service_port, app):
-        for port in self.app_ports(app):
-            port_map = self.build_service_port(port)
-            if port_map["port"] == service_port:
-                return self.build_service_name(port_map["type"], app)
-
-        raise Exception(f"找不到端口[{service_port}]对应的服务类型")
+        return self.app2port2service[app][service_port]
 
     def build_service_type2ports(self):
         '''

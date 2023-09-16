@@ -204,7 +204,10 @@ include: part-common.yml
 ```
 1 一般资源都需要放到app作用域下, 即资源的label=app名, 代表一组资源组成了一个app。
 一般资源是指: config/secret/pod/rc/rs/ds/sts/deploy/service/job/cronjob/hpa/ingress/svc，以应用作为管理粒度。
-2 一般资源的资源名=app名, 除了NodePort类型的service资源名=app名-np
+2 一般资源的资源名=app名, 除了以下情况的service资源
+2.1 ClusterIP类型的service资源名=app名
+2.2 如果不存在ClusterIP类型的service资源，则其他类型的service资源名=app名
+2.3 如果存在ClusterIP类型的service资源，则NodePort类型的service资源名=app名-np，LoadBalancer类型的service资源名=app名-lb
 ```
 
 13. labels：设置应用标签
