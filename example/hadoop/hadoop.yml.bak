@@ -1,0 +1,51 @@
+# https://blog.csdn.net/cobracanary/article/details/126246695
+# 所有角色放同一个pod
+- app(hadoop):
+    - config: ${read_env(./hadoop.env)} # 读配置
+    - containers:
+        namenode:
+          image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 9870:9870
+            - 9000:9000
+          volumes:
+            - /data/hadoop/dfs/name:/hadoop/dfs/name
+            - /data/hadoop/input:/input
+          env:
+            CLUSTER_NAME: test
+          env_from:
+            - config
+
+        datanode:
+          image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+          volumes:
+            - /data/hadoop/dfs/data:/hadoop/dfs/data
+          env_from:
+            - config
+
+        resourcemanager:
+          image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+          env_from:
+            - config
+
+        nodemanager:
+          image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+          env_from:
+            - config
+
+        historyserver:
+          image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+          volumes:
+            - /data/hadoop/yarn/timeline:/hadoop/yarn/timeline
+          env_from:
+            - config
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: hww-pc
+        hosts: # 域名解析
+          127.0.0.1:
+              - namenode
+              - datanode
+              - resourcemanager

@@ -41,8 +41,8 @@
           image: bitnami/spark
           env:
             SPARK_MODE: worker
-            # bug: worker pod居然不能解析域名 spark-master-np.default => 暂时先用ip
-            #SPARK_MASTER_URL: spark://spark-master-np.default:7077
+            # bug: worker pod居然不能解析域名 spark-master.default => 暂时先用ip
+            #SPARK_MASTER_URL: spark://spark-master.default:7077
             SPARK_MASTER_URL: spark://$master_ip:7077
             SPARK_WORKER_PORT: 8081 # 显式指定ui端口
             SPARK_WORKER_MEMORY: 1G

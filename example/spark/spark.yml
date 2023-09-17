@@ -1,8 +1,10 @@
 # 使用物理ip来作为master url
 # https://blog.csdn.net/cobracanary/article/details/126246695
 - set_vars:
-    master_host: mac
-    master_ip: 192.168.62.209
+    master_host: hww-pc
+    master_ip: 192.168.1.10
+#    master_host: mac
+#    master_ip: 192.168.62.209
 # 1主2从
 # 主
 - app(spark-master):
@@ -17,6 +19,9 @@
             SPARK_RPC_ENCRYPTION_ENABLED: no
             SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: no
             SPARK_SSL_ENABLED: no
+            # hadoop yarn配置+client库，但可惜 pyspark --master yarn 不能进入命令行
+            YARN_CONF_DIR: /opt/hadoop-3.2.1/etc
+            LD_LIBRARY_PATH: '/opt/hadoop-3.2.1/lib/native/:/opt/bitnami/python/lib/:/opt/bitnami/spark/venv/lib/python3.8/site-packages/numpy.libs/:'
 #          ports:
 #            - '8080:8080:8080' # spark UI
 #            - '7077:7077:7077' # 用于连接spark
@@ -25,6 +30,7 @@
           volumes:
             - /data/spark/python:/python # 映射/python目录，用于存放pyspark代码，方便运行
             - /data/spark/input:/input
+            - /opt/hadoop-3.2.1:/opt/hadoop-3.2.1 # 映射hadoop目录
     # 部署
     - deploy:
         hostname:
@@ -50,9 +56,8 @@
             - '8081:8081' # spark UI
           volumes:
             - /data/spark/input:/input
-    # 部署
-    - deploy:
+    # deamonset
+    - ds:
         hostname:
-        replicas: 2 # 副本数
 
 

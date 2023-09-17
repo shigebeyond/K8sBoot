@@ -1,12 +1,23 @@
 # https://blog.csdn.net/cobracanary/article/details/126246695
-- app(hadoop):
+# 每个角色放不同的pod
+- set_vars:
+    master_host: hww-pc
+    master_ip: 192.168.1.10
+#    master_host: mac
+#    master_ip: 192.168.62.209
+    deploy_master:
+      replicas: 1 # 副本数
+      nodeSelector: # 节点选择: dict形式
+        kubernetes.io/hostname: $master_host
+# 1 命名节点
+- app(namenode):
     - config: ${read_env(./hadoop.env)} # 读配置
     - containers:
         namenode:
           image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
           ports:
-            - 9870:9870
-            - 9000:9000
+            - 9870:9870:9870 # ui
+            - 9000:9000:9000 # rpc
           volumes:
             - /data/hadoop/dfs/name:/hadoop/dfs/name
             - /data/hadoop/input:/input
@@ -14,39 +25,70 @@
             CLUSTER_NAME: test
           env_from:
             - config
-
+    # 部署
+    - deploy: $deploy_master
+# 2 数据节点
+- app(datanode):
+    - config: ${read_env(./hadoop.env)} # 读配置
+    - containers:
         datanode:
           image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 9864:9864:9864 # ui
           volumes:
             - /data/hadoop/dfs/data:/hadoop/dfs/data
           env_from:
             - config
-
+    - ds:
+# 3 资源管理者
+#- app(resourcemanager):
+#    - config: ${read_env(./hadoop.env)} # 读配置
+#    - containers:
+#        resourcemanager:
+#          image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8 # bug: pod内不能访问namenode与datanode
+#          ports:
+#            - 8088:8088:8088
+#          env_from:
+#            - config
+- app(resourcemanager):
+    - config: ${read_env(./hadoop.env)} # 读配置
+    - containers:
         resourcemanager:
-          image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+          image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 8088:8088:8088 # ui
           env_from:
             - config
-
+          command: '/opt/hadoop-3.2.1/bin/yarn --config /etc/hadoop resourcemanager'
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: $master_host
+# 4 节点管理者
+- app(nodemanager):
+    - config: ${read_env(./hadoop.env)} # 读配置
+    - containers:
         nodemanager:
           image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 8042:8042:8042 # ui
           env_from:
             - config
-
+    - ds:
+# 5 历史服务器
+- app(historyserver):
+    - config: ${read_env(./hadoop.env)} # 读配置
+    - containers:
         historyserver:
           image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 8188:8188:8188 # ui
           volumes:
             - /data/hadoop/yarn/timeline:/hadoop/yarn/timeline
           env_from:
             - config
     # 部署
-    - deploy:
-        replicas: 1 # 副本数
-        nodeSelector: # 节点选择: dict形式
-          kubernetes.io/hostname: hww-pc
-        hosts: # 域名解析
-          127.0.0.1:
-              - namenode
-              - datanode
-              - resourcemanager
+    - deploy: $deploy_master
 
 
