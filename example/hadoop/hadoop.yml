@@ -1,10 +1,8 @@
 # https://blog.csdn.net/cobracanary/article/details/126246695
 # 每个角色放不同的pod
 - set_vars:
-    master_host: hww-pc
-    master_ip: 192.168.1.10
-#    master_host: mac
-#    master_ip: 192.168.62.209
+#    master_host: hww-pc
+    master_host: mac
     deploy_master:
       replicas: 1 # 副本数
       nodeSelector: # 节点选择: dict形式

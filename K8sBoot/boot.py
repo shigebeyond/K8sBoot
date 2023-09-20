@@ -1111,6 +1111,11 @@ class Boot(YamlBoot):
             "livenessProbe": self.build_probe(get_and_del_dict_item(option, "live?")),
             "readinessProbe": self.build_probe(get_and_del_dict_item(option, "ready?")),
         }
+        user = get_and_del_dict_item(option, 'user')
+        if user is not None and "securityContext" not in ret:
+            ret["securityContext"] = {
+                "runAsUser": user
+            }
         ret.update(option)
         del_dict_none_item(ret)
         return ret

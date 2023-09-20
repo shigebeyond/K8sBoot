@@ -1,16 +1,17 @@
 # 使用物理ip来作为master url
 # https://blog.csdn.net/cobracanary/article/details/126246695
 - set_vars:
-    master_host: hww-pc
-    master_ip: 192.168.1.10
-#    master_host: mac
-#    master_ip: 192.168.62.209
+#    master_host: hww-pc
+#    master_ip: 192.168.1.10
+    master_host: mac
+    master_ip: 192.168.62.209
 # 1主2从
 # 主
 - app(spark-master):
     - containers:
         master:
           image: bitnami/spark # spark版本是3.2.0
+          user: 0 # 指定运行该Pod的user ID, 0为root
           env:
             SPARK_MODE: master
             SPARK_MASTER_HOST: $master_ip
@@ -31,6 +32,7 @@
             - /data/spark/python:/python # 映射/python目录，用于存放pyspark代码，方便运行
             - /data/spark/input:/input
             - /opt/hadoop-3.2.1:/opt/hadoop-3.2.1 # 映射hadoop目录
+            - /home/shi/.local/lib/python3.7/site-packages:/opt/bitnami/python/lib/python3.8/site-packages # 映射python库
     # 部署
     - deploy:
         hostname:
@@ -42,6 +44,7 @@
     - containers:
         worker:
           image: bitnami/spark
+          user: 0 # 指定运行该Pod的user ID, 0为root
           env:
             SPARK_MODE: worker
             SPARK_MASTER_URL: spark://$master_ip:7077
