@@ -7,7 +7,6 @@ import json
 import os
 import re
 from itertools import groupby
-from functools import wraps
 from urllib import parse
 from pyutilb.util import *
 from pyutilb.file import *
@@ -15,15 +14,6 @@ from pyutilb.cmd import *
 from pyutilb import YamlBoot, BreakException
 from pyutilb.log import log
 from dotenv import dotenv_values
-
-# 在动作参数上进行变量替换，这样支持参数类型为str或dict或list等
-def replace_var_on_params(func):
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        args = [replace_var(arg, False) for arg in args]
-        result = func(self, *args, **kwargs)
-        return result
-    return wrapper
 
 '''
 k8s配置生成的基于yaml的启动器

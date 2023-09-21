@@ -1,10 +1,12 @@
 # 使用物理ip来作为master url
 # https://blog.csdn.net/cobracanary/article/details/126246695
 - set_vars:
-    master_host: hww-pc
-    master_ip: 192.168.1.9
-#    master_host: mac
-#    master_ip: 192.168.62.209
+#    master_host: hww-pc
+#    master_ip: 192.168.1.9
+#    home: /home/hww
+    master_host: mac
+    master_ip: 192.168.62.209
+    home: /home/shi
 # 1主2从
 # 主
 - app(spark-master):
@@ -31,8 +33,10 @@
           volumes:
             - /data/spark/python:/python # 映射/python目录，用于存放pyspark代码，方便运行
             - /data/spark/input:/input
+            - /data/spark/output:/output
             - /opt/hadoop-3.2.1:/opt/hadoop-3.2.1 # 映射hadoop目录
-            - /home/hww/.local/lib/python3.8/site-packages:/.local/lib/python3.8/site-packages # 映射python库
+            - $home/.local/lib/python3.8/site-packages:/.local/lib/python3.8/site-packages # 映射python依赖目录
+            - /data/spark/jars/mysql-connector-java-5.1.6.jar:/opt/bitnami/spark/jars/mysql-connector-java-5.1.6.jar # 映射java依赖
     # 部署
     - deploy:
         hostname:
@@ -41,6 +45,11 @@
           kubernetes.io/hostname: $master_host
 # 从
 - app(spark-worker):
+    - initContainers:
+        init:
+          command: chmod 0777 -R /output # 授权输出目录写权限，否则无法写入
+          volumes:
+            - /data/spark/output:/output
     - containers:
         worker:
           image: bitnami/spark
@@ -57,8 +66,12 @@
             SPARK_SSL_ENABLED: no
           ports:
             - '8081:8081' # spark UI
+            - '8082:8082' # 若8081被占用，则会递增
           volumes:
             - /data/spark/input:/input
+            - /data/spark/output:/output
+            - /data/spark/work:/opt/bitnami/spark/work # executor工作目录，有日志
+            - /data/spark/jars/mysql-connector-java-5.1.6.jar:/opt/bitnami/spark/jars/mysql-connector-java-5.1.6.jar # 映射java依赖
     # deamonset
     - ds:
         hostname:
