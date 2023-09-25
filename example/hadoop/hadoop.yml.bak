@@ -1,13 +1,17 @@
 # https://blog.csdn.net/cobracanary/article/details/126246695
-# 所有角色放同一个pod
+# 单机模式:所有角色放同一个pod
+# 问题: datanode ip是127.0.0.1, 导致hdfs client无法读取具体datanode上的block数据, 报错: 23/09/25 16:04:08 WARN DFSClient: Failed to connect to /127.0.0.1:9866 for file /input/words.txt for block BP-1873137240-172.16.0.157-1692780050853:blk_1073741898_1074, add to deadNodes and continue. java.net.ConnectException: 拒绝连接
+- set_vars:
+#    host: hww-pc
+    host: shi-pc
 - app(hadoop):
     - config: ${read_env(./hadoop.env)} # 读配置
     - containers:
         namenode:
           image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
           ports:
-            - 9870:9870
-            - 9000:9000
+            - 9870:9870:9870 # ui
+            - 9000:9000:9000 # rpc
           volumes:
             - /data/hadoop/dfs/name:/hadoop/dfs/name
             - /data/hadoop/input:/input
@@ -18,6 +22,8 @@
 
         datanode:
           image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 9864:9864:9864 # ui
           volumes:
             - /data/hadoop/dfs/data:/hadoop/dfs/data
           env_from:
@@ -25,16 +31,22 @@
 
         resourcemanager:
           image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 8088:8088:8088 # ui
           env_from:
             - config
 
         nodemanager:
           image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 8042:8042:8042 # ui
           env_from:
             - config
 
         historyserver:
           image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+          ports:
+            - 8188:8188:8188 # ui
           volumes:
             - /data/hadoop/yarn/timeline:/hadoop/yarn/timeline
           env_from:
@@ -43,7 +55,7 @@
     - deploy:
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
-          kubernetes.io/hostname: hww-pc
+          kubernetes.io/hostname: $host
         hosts: # 域名解析
           127.0.0.1:
               - namenode
