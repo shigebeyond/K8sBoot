@@ -1,0 +1,13 @@
+- app(mongo):
+    - containers:
+        mongodb:
+          image: mongo:latest
+          ports:
+            - "27017:27017:27017"
+          volumes:
+            - /data/mongo:/data/db
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: mac

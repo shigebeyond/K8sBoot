@@ -10,6 +10,7 @@
           ports: # 端口映射
             - 30056:3306:3306 # 宿主机端口:服务端口:容器端口
           volumes: # 卷映射
+            #- /home/shi/data/mysql:/var/lib/mysql/ # 个人电脑
             - /data/mysql56:/var/lib/mysql/
     # 部署
     - deploy:

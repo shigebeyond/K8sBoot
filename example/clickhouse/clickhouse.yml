@@ -1,0 +1,23 @@
+# http://www.manongjc.com/detail/40-sanfaefuynbwugm.html
+- app(clickhouse):
+    - containers:
+        clickhouse:
+          image: yandex/clickhouse-server:21.3.20-alpine
+          ports: # 端口映射
+            - 8123:8123:8123
+            - 9000:9000:9000
+          volumes: # 卷映射
+            # 默认配置
+#            - /data/clickhouse/config/docker_related_config.xml:/etc/clickhouse-server/config.d/docker_related_config.xml
+#            - /data/clickhouse/config/config.xml:/etc/clickhouse-server/config.xml
+#            - /data/clickhouse/config/users.xml:/etc/clickhouse-server/users.xml
+            - /etc/localtime:/etc/localtime:ro
+            # 运行日志
+            - /data/clickhouse/log:/var/log/clickhouse-server
+            # 数据持久
+            - /data/clickhouse/data:/var/lib/clickhouse
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: mac

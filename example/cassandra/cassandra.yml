@@ -1,0 +1,26 @@
+# https://blog.csdn.net/Apple_wolf/article/details/127704102
+- set_vars:
+    seeds:  192.168.62.160,192.168.62.209 # 种子节点ip
+- app(cassandra):
+    - containers:
+        cassandra:
+          image: cassandra:4.1
+          env:
+            CASSANDRA_CLUSTER_NAME: cassandra
+#            CASSANDRA_SEEDS: $seeds # 种子节点ip，单机不需要，集群才需要
+            #JVM_OPTS: -Xmx6144m -Xms2048m # 限制内存大小
+          ports:
+            - 7000:7000:7000 # 节点间通信
+            - 9042:9042:9042 # cql本地传输端口
+            - 9160:9160:9160 # thrift client api
+          volumes:
+            - /data/cassandra/commitlog:/var/lib/cassandra/commitlog
+            - /data/cassandra/hints:/var/lib/cassandra/hints
+            - /data/cassandra/data:/var/lib/cassandra/data
+            - /data/cassandra/saved_caches:/var/lib/cassandra/saved_caches
+            - /data/cassandra/logs:/var/log/cassandra
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: shi-pc
