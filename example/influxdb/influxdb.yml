@@ -1,0 +1,20 @@
+# https://zhuanlan.zhihu.com/p/623979496
+- app(influxdb):
+    - containers:
+        influxdb:
+          image: influxdb
+          env:
+            INFLUXDB_DB: test
+            INFLUXDB_ADMIN_USER: root
+            INFLUXDB_ADMIN_PASSWORD: root
+            INFLUXDB_USER: test
+            INFLUXDB_USER_PASSWORD: test
+          volumes:
+            - /data/influxdb/data:/var/lib/influxdb
+          ports:
+            - "8086:8086:8086"
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: shi-pc

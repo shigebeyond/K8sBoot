@@ -4,8 +4,8 @@
         clickhouse:
           image: yandex/clickhouse-server:21.3.20-alpine
           ports: # 端口映射
-            - 8123:8123:8123
-            - 9000:9000:9000
+            - 8123:8123:8123 # http
+            - 9000:9000:9000 # tcp
           volumes: # 卷映射
             # 默认配置
 #            - /data/clickhouse/config/docker_related_config.xml:/etc/clickhouse-server/config.d/docker_related_config.xml
