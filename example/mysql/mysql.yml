@@ -4,6 +4,7 @@
     - containers:
         mysql56:
           image: mysql:5.6.49
+          user: 999 # 指定运行该Pod的user ID, 0为root, 999为mysql, 启动命令mysqld要求是mysql用户执行
           env:
             MYSQL_ROOT_PASSWORD: root
             TZ: Asia/Shanghai
@@ -12,8 +13,9 @@
           volumes: # 卷映射
             #- /home/shi/data/mysql:/var/lib/mysql/ # 个人电脑
             - /data/mysql56:/var/lib/mysql/
+          command: mysqld --server-id=1 --log-bin=mysql-bin --binlog-format=row --expire-logs-days=3 --log_slave_updates=1 --port=3306
     # 部署
     - deploy:
         replicas: 1 # 副本数
         nodeSelector: # 节点选择: dict形式
-          kubernetes.io/hostname: mac
+          kubernetes.io/hostname: shi-pc

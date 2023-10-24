@@ -1,6 +1,6 @@
 # https://blog.csdn.net/Apple_wolf/article/details/127704102
 - set_vars:
-    seeds:  192.168.62.160,192.168.62.209 # 种子节点ip
+    seeds:  192.168.61.18,192.168.61.14 # 种子节点ip
 - app(cassandra):
     - containers:
         cassandra:

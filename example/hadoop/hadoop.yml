@@ -38,7 +38,8 @@
             - /data/hadoop/dfs/data:/hadoop/dfs/data
           env_from:
             - config
-    - ds:
+    #- ds:
+    - deploy: $deploy_master
 # 3 资源管理者
 #- app(resourcemanager):
 #    - config: ${read_env(./hadoop.env)} # 读配置
@@ -74,7 +75,8 @@
             - 8042:8042:8042 # ui
           env_from:
             - config
-    - ds:
+    #- ds:
+    - deploy: $deploy_master
 # 5 历史服务器
 - app(historyserver):
     - config: ${read_env(./hadoop.env)} # 读配置

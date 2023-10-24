@@ -1,0 +1,15 @@
+# https://blog.csdn.net/yqyn6/article/details/129861257
+- app(maxwell):
+    - config_from_files: # 配置文件
+        - ./config.properties
+    - containers:
+        maxwell:
+          image: zendesk/maxwell
+          command: bin/maxwell --config /etc/maxwell/config.properties
+          volumes:
+            - config://:/etc/maxwell
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: shi-pc

@@ -5,8 +5,12 @@
 #    master_ip: 192.168.1.9
 #    home: /home/hww
     master_host: mac
-    master_ip: 192.168.62.209
+    master_ip: 192.168.61.14
     home: /home/shi
+    deploy_master:
+      replicas: 1 # 副本数
+      nodeSelector: # 节点选择: dict形式
+        kubernetes.io/hostname: $master_host
 # 1主2从
 # 主
 - app(spark-master):
@@ -24,6 +28,7 @@
             SPARK_SSL_ENABLED: no
             # hadoop yarn配置+client库，但可惜 pyspark --master yarn 不能进入命令行
             YARN_CONF_DIR: /opt/hadoop-3.2.1/etc
+            HADOOP_CONF_DIR: /opt/hadoop-3.2.1/etc
             LD_LIBRARY_PATH: '/opt/hadoop-3.2.1/lib/native/:/opt/bitnami/python/lib/:/opt/bitnami/spark/venv/lib/python3.8/site-packages/numpy.libs/:'
 #          ports:
 #            - '8080:8080:8080' # spark UI
@@ -36,13 +41,10 @@
             - /data/spark/output:/output
             - /opt/hadoop-3.2.1:/opt/hadoop-3.2.1 # 映射hadoop目录
             - $home/.local/lib/python3.8/site-packages:/.local/lib/python3.8/site-packages # 映射python依赖目录
-            - /data/spark/jars/mysql-connector-java-5.1.6.jar:/opt/bitnami/spark/jars/mysql-connector-java-5.1.6.jar # 映射java依赖
+            - /data/spark/jars/mysql-connector-java-5.1.6.jar:/opt/bitnami/spark/jars/mysql-connector-java-5.1.6.jar # 映射mysql驱动依赖
+            - /data/spark/jars/clickhouse-jdbc-0.5.0-all.jar:/opt/bitnami/spark/jars/clickhouse-jdbc-0.5.0-all.jar # 映射clickhouse驱动依赖
     # 部署
-    - deploy:
-        hostname:
-        replicas: 1 # 副本数
-        nodeSelector: # 节点选择: dict形式
-          kubernetes.io/hostname: $master_host
+    - deploy: $deploy_master
 # 从
 - app(spark-worker):
     - initContainers:
@@ -71,7 +73,8 @@
             - /data/spark/input:/input
             - /data/spark/output:/output
             - /data/spark/work:/opt/bitnami/spark/work # executor工作目录，有日志
-            - /data/spark/jars/mysql-connector-java-5.1.6.jar:/opt/bitnami/spark/jars/mysql-connector-java-5.1.6.jar # 映射java依赖
+            - /data/spark/jars/mysql-connector-java-5.1.6.jar:/opt/bitnami/spark/jars/mysql-connector-java-5.1.6.jar # 映射mysql驱动依赖
+            - /data/spark/jars/clickhouse-jdbc-0.5.0-all.jar:/opt/bitnami/spark/jars/clickhouse-jdbc-0.5.0-all.jar # 映射clickhouse驱动依赖
     # deamonset
     - ds:
         hostname:
