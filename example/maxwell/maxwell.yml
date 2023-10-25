@@ -1,4 +1,7 @@
 # https://blog.csdn.net/yqyn6/article/details/129861257
+# mysql部署参考 example/mysql/mysql.yml
+# kafka部署参考 example/kafka/kafka.yml
+# maxwell部署与测试参考 <maxwell-db日志订阅.md>
 - app(maxwell):
     - config_from_files: # 配置文件
         - ./config.properties
