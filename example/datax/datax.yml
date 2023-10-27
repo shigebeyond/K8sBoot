@@ -1,0 +1,23 @@
+# https://blog.csdn.net/zoeou/article/details/127863244
+- app(datax):
+    - config_from_files: # 配置文件
+        # mysql连接配置, 要建datax_web库并执行 https://github.com/WeiYe-Jing/datax-web/blob/master/bin/db/datax_web.sql
+        - ./bootstrap.properties
+        # 测试的作业配置, 在容器中执行 cd /home/datax/datax/bin; python datax.py ../job/table-job.json
+        - ./job/table-job.json
+        - ./job/query-job.json
+    - containers:
+        dataxweb:
+          image: linshellfeng/datax_web:3.0.1
+          env:
+          ports:
+            - "9527:9527:9527"
+          volumes:
+            - config://bootstrap.properties:/home/datax/datax-web-2.1.2/modules/datax-admin/conf/bootstrap.properties
+            - config://table-job.json:/home/datax/datax/job/table-job.json
+            - config://query-job.json:/home/datax/datax/job/query-job.json
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: shi-pc

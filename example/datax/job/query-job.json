@@ -1,0 +1,37 @@
+{
+    "job": {
+        "setting": {
+            "speed": {
+                "channel": 1
+            }
+        },
+        "content": [
+            {
+                "reader": {
+                    "name": "mysqlreader",
+                    "parameter": {
+                        "username": "root",
+                        "password": "root",
+                        "connection": [
+                            {
+                                "querySql": [
+                                    "select id,name,age from user where id < 20;"
+                                ],
+                                "jdbcUrl": [
+                                    "jdbc:mysql://192.168.61.14:3306/test"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "writer": {
+                    "name": "streamwriter",
+                    "parameter": {
+                        "print": true,
+                        "encoding": "UTF-8"
+                    }
+                }
+            }
+        ]
+    }
+}
