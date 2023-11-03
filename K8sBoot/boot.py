@@ -933,7 +933,7 @@ class Boot(YamlBoot):
             return
         yamls = []
         type2ports = self.build_service_type2ports()
-        for type, ports in type2ports:
+        for type, ports in type2ports.items():
             ports = list(ports)
             anns = {
                 "kube-router.io/service.scheduler": "lc" # 调度算法为least connection
@@ -984,10 +984,10 @@ class Boot(YamlBoot):
     # 记录当前app的端口对服务名映射
     def record_port2service(self, type2ports):
         port2service = {}  # 记录当前app的端口对服务名映射
-        for type, ports in type2ports:
+        for type, ports in type2ports.items():
             service = self.build_service_name(type, type2ports, self._app)
             for port in ports:
-                port2service[port] = service # 端口->服务名
+                port2service[port['port']] = service # 端口->服务名
         self.app2port2service[self._app] = port2service
 
     # 通过服务端口来获得服务名
@@ -1009,8 +1009,11 @@ class Boot(YamlBoot):
             type = x['type']
             del x['type']
             return type
-        self._service_type2ports = groupby(port_maps, key=select_type)
-        return self._service_type2ports
+
+        ret = groupby(port_maps, key=select_type)
+        ret = {k: list(v) for k, v in ret} # 一次性迭代器转dict
+        self._service_type2ports = ret
+        return ret
 
     def build_service_port(self, port):
         if isinstance(port, int):
