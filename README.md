@@ -474,6 +474,48 @@ ingress:
 ingress: nginx:80 # 直接int或str
 ```
 
+30. ingress_by_cookie: 基于 Cookie 的流量切分，适用于灰度发布与 A/B 测试
+```
+# K8sBoot/example/ingress-by-cookie/gateway-by-cookie.yml
+# 测试： curl --cookie "test=always" http://canary.com
+- include: ../ingress/1hello.yml
+- include: ../ingress/2demo.yml
+- app(gateway-prod):
+    - ingress:
+        canary.com: hello
+- app(gateway-grey):
+    - ingress_by_cookie(test):
+        canary.com: demo
+```
+
+31. ingress_by_header: 基于 Request Header 的流量切分，适用于灰度发布以及 A/B 测试
+```
+# K8sBoot/example/ingress-by-header/gateway-by-header.yml
+# 测试：curl -H "Region: cd" http://canary.com
+- include: ../ingress/1hello.yml
+- include: ../ingress/2demo.yml
+- app(gateway-prod):
+    - ingress:
+        canary.com: hello
+- app(gateway-grey):
+    - ingress_by_header(Region=cd):
+        canary.com: demo
+```
+
+32. ingress_by_weight: 基于服务权重的流量切分，适用于蓝绿部署
+```
+# K8sBoot/example/ingress-by-weight/gateway-by-weight.yml
+# 测试： for i in {1..10}; do  curl http://canary.com/; done;
+- include: ../ingress/1hello.yml
+- include: ../ingress/2demo.yml
+- app(gateway-green):
+    - ingress:
+        canary.com: hello
+- app(gateway-blue):
+    - ingress_by_weight(50):
+        canary.com: demo
+```
+
 ## 9 demo
 示例见源码 [example](example) 目录，接下来以 [example/ingress](example/ingress) 为案例讲解下 K8sBoot 与 [k8scmd](https://github.com/shigebeyond/k8scmd) 的使用:
 

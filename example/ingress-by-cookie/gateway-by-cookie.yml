@@ -1,0 +1,11 @@
+# 基于 Cookie 的流量切分，适用于灰度发布与 A/B 测试
+# 不要与 3gateway.yml 同时应用, 否则 gateway-prod 无效
+# 测试： curl --cookie "test=always" http://canary.com
+- include: ../ingress/1hello.yml
+- include: ../ingress/2demo.yml
+- app(gateway-prod):
+    - ingress:
+        canary.com: hello
+- app(gateway-grey):
+    - ingress_by_cookie(test):
+        canary.com: demo

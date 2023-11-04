@@ -1,0 +1,11 @@
+# 基于服务权重的流量切分，适用于蓝绿部署
+# 不要与 3gateway.yml 同时应用, 否则 gateway-green 无效
+# 测试： for i in {1..10}; do  curl http://canary.com/; done;
+- include: ../ingress/1hello.yml
+- include: ../ingress/2demo.yml
+- app(gateway-green):
+    - ingress:
+        canary.com: hello
+- app(gateway-blue):
+    - ingress_by_weight(50):
+        canary.com: demo

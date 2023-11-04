@@ -57,6 +57,9 @@ class Boot(YamlBoot):
             'cronjob': self.cronjob,
             'hpa': self.hpa,
             'ingress': self.ingress,
+            'ingress_by_header': self.ingress_by_header,
+            'ingress_by_cookie': self.ingress_by_cookie,
+            'ingress_by_weight': self.ingress_by_weight,
             'initContainers': self.initContainers,
             'containers': self.containers,
             'cname': self.cname,
@@ -764,13 +767,42 @@ class Boot(YamlBoot):
             ret.append(item)
         return ret
 
+    # 基于 Request Header 的流量切分，适用于灰度发布以及 A/B 测试
+    def ingress_by_header(self, url2port, option):
+        header, value = option.split('=')
+        anns = {
+            "nginx.ingress.kubernetes.io/canary": "true",
+            "nginx.ingress.kubernetes.io/canary-by-header": header,
+            "nginx.ingress.kubernetes.io/canary-by-header-value": value
+        }
+        self.ingress(url2port, anns)
+
+    # 基于 Cookie 的流量切分，适用于灰度发布与 A/B 测试
+    def ingress_by_cookie(self, url2port, option):
+        anns = {
+            "nginx.ingress.kubernetes.io/canary": "true",
+            "nginx.ingress.kubernetes.io/canary-by-cookie": option,
+        }
+        self.ingress(url2port, anns)
+
+    # 基于服务权重的流量切分，适用于蓝绿部署
+    def ingress_by_weight(self, url2port, option):
+        anns = {
+            "nginx.ingress.kubernetes.io/canary": "true",
+            "nginx.ingress.kubernetes.io/canary-weight": option,
+        }
+        self.ingress(url2port, anns)
+
+    # 路由
     @replace_var_on_params
-    def ingress(self, url2port):
+    def ingress(self, url2port, anns = {}):
         '''
         生成 ingress
         :param url2port: url对服务端口的映射，dict类型，支持字典树形式
         :return:
         '''
+        # anns['kubernetes.io/ingress.class'] = 'nginx' # annotation "kubernetes.io/ingress.class" is deprecated, please use 'spec.ingressClassName' instead
+
         # 如果参数是int/str，则表示是默认后端
         if isinstance(url2port, (int, str)):
             # 分割出转发的后端服务名+服务端口
@@ -795,7 +827,7 @@ class Boot(YamlBoot):
             return
 
         # 修正字典树的路径
-        url2port = self.fix_trie_paths(url2port)
+        url2port = self.fix_trie_paths(url2port, ret={}) # fix bug: 第二次调用ret居然会记录上一次调用的结果, 因此每次调用重置ret
         # 按域名分组
         def select_scheme_host(url):
             url = parse.urlparse(url)
@@ -820,7 +852,7 @@ class Boot(YamlBoot):
                 service_name, service_port = self.split_backend_service_and_port(service_port)
                 path = {
                     "pathType": "Prefix",
-                    "path": url.path,
+                    "path": url.path or '/',
                     "backend": {
                         "service": {  # 转发给哪个服务
                             "name": service_name,
@@ -853,11 +885,8 @@ class Boot(YamlBoot):
             ]
 
         # 重写注解
-        anns = None
         if rewrite:
-            anns = {
-                'nginx.ingress.kubernetes.io/rewrite-target': '/$2'
-            }
+            anns['nginx.ingress.kubernetes.io/rewrite-target'] = '/$2'
 
         yaml = {
             "apiVersion": "networking.k8s.io/v1",
