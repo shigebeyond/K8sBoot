@@ -14,6 +14,7 @@ from pyutilb.cmd import *
 from pyutilb import YamlBoot, BreakException
 from pyutilb.log import log
 from dotenv import dotenv_values
+from kubernetes import client, config
 
 '''
 k8s配置生成的基于yaml的启动器
@@ -1826,6 +1827,112 @@ class Boot(YamlBoot):
                 }
             ret.append(item)
         return ret
+
+    # --------- 应用k8s资源文件 --------
+    # 应用k8s资源文件
+    def apply(self):
+        self.prepare_k8s_apis()
+        for type, yml in self.yield_output_yaml():
+            func = self.create_apis[type] # 获得创建方法
+            if type == 'ns' or type == 'pv':
+                func(body=yml)
+            else:
+                func(namespace=self._ns, body=yml)
+
+    # 删除k8s资源
+    def delete(self):
+        self.prepare_k8s_apis()
+        for type, yml in self.yield_output_yaml():
+            name = yml['metadata']['name']
+            func = self.delete_apis[type] # 获得删除方法
+            if type == 'ns' or type == 'pv':
+                func(name=name)
+            else:
+                func(namespace=self._ns, name=name)
+
+    # 遍历输出的yaml
+    def yield_output_yaml(self):
+        files = os.listdir(self.output_dir)
+        for file in files:
+            if file.endswith('.yml'):
+                # 解析出资源文件的类型，如demo-svc.yml的类型为svc(service)
+                mat = re.search(r"-(\w+).yml", file)
+                type = mat.group(1) # 资源类型
+                # 获得yaml
+                path = os.path.join(self.output_dir, file)
+                yml = read_yaml(path)
+                yield (type, yml)
+
+    # 准备好k8s api
+    def prepare_k8s_apis(self):
+        if self.create_apis:
+            return
+
+        config.load_kube_config()
+        core_api = client.CoreV1Api()
+        app_api = client.AppsV1Api()
+        batch_api = client.BatchV1beta1Api()
+        self.create_apis = {
+            'ns': core_api.create_namespace,
+            'pv': core_api.create_persistent_volume,
+
+            'config': core_api.create_namespaced_config_map,
+            # 'bind': core_api.create_namespaced_binding,
+            # 'endpoint': core_api.create_namespaced_endpoints,
+            # 'event': core_api.create_namespaced_event,
+            # 'limit_range': core_api.create_namespaced_limit_range,
+            'pvc': core_api.create_namespaced_persistent_volume_claim,
+            'pod': core_api.create_namespaced_pod,
+            # 'pod_bind': core_api.create_namespaced_pod_binding,
+            # 'pod_evict': core_api.create_namespaced_pod_eviction,
+            # 'pod_template': core_api.create_namespaced_pod_template,
+            'rc': core_api.create_namespaced_replication_controller,
+            # 'resource_quota': core_api.create_namespaced_resource_quota,
+            'secret': core_api.create_namespaced_secret,
+            'svc': core_api.create_namespaced_service,
+            # 'service_account': core_api.create_namespaced_service_account,
+            # 'service_account_token': core_api.create_namespaced_service_account_token,
+
+            # 'cr': app_api.create_namespaced_controller_revision,
+            'ds': app_api.create_namespaced_daemon_set,
+            'deploy': app_api.create_namespaced_deployment,
+            'rs': app_api.create_namespaced_replica_set,
+            'sts': app_api.create_namespaced_stateful_set,
+
+            'job': batch_api.create_namespaced_job,
+            'cron_job': batch_api.create_namespaced_cron_job,
+        }
+        self.delete_apis = {
+            'ns': core_api.delete_namespace,
+            'pv': core_api.delete_persistent_volume,
+
+            'config': core_api.delete_namespaced_config_map,
+            # 'bind': core_api.delete_namespaced_binding,
+            # 'endpoint': core_api.delete_namespaced_endpoints,
+            # 'event': core_api.delete_namespaced_event,
+            # 'limit_range': core_api.delete_namespaced_limit_range,
+            'pvc': core_api.delete_namespaced_persistent_volume_claim,
+            'pod': core_api.delete_namespaced_pod,
+            # 'pod_bind': core_api.delete_namespaced_pod_binding,
+            # 'pod_evict': core_api.delete_namespaced_pod_eviction,
+            # 'pod_template': core_api.delete_namespaced_pod_template,
+            'rc': core_api.delete_namespaced_replication_controller,
+            # 'resource_quota': core_api.delete_namespaced_resource_quota,
+            'secret': core_api.delete_namespaced_secret,
+            'svc': core_api.delete_namespaced_service,
+            # 'service_account': core_api.delete_namespaced_service_account,
+            # 'service_account_token': core_api.delete_namespaced_service_account_token,
+
+            # 'cr': app_api.delete_namespaced_controller_revision,
+            'ds': app_api.delete_namespaced_daemon_set,
+            'deploy': app_api.delete_namespaced_deployment,
+            'rs': app_api.delete_namespaced_replica_set,
+            'sts': app_api.delete_namespaced_stateful_set,
+
+            'job': batch_api.delete_namespaced_job,
+            'cron_job': batch_api.delete_namespaced_cron_job,
+        }
+
 
 # cli入口
 def main():
