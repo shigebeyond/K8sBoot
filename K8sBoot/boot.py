@@ -773,7 +773,8 @@ class Boot(YamlBoot):
         anns = {
             "nginx.ingress.kubernetes.io/canary": "true",
             "nginx.ingress.kubernetes.io/canary-by-header": header,
-            "nginx.ingress.kubernetes.io/canary-by-header-value": value
+            "nginx.ingress.kubernetes.io/canary-by-header-value": value # 精确匹配
+            # "nginx.ingress.kubernetes.io/canary-by-header-pattern": "cd|sz" # todo: 正则匹配
         }
         self.ingress(url2port, anns)
 
