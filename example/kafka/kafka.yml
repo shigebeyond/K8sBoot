@@ -9,7 +9,7 @@
           ports: '*' # 使用宿主机网络 => kafka server才能以物理ip暴露
 #            - "9092:9092:9092"
           env:
-            KAFKA_KRAFT_CLUSTER_ID: ${ref_pod_field(metadata.name)}
+            KAFKA_KRAFT_CLUSTER_ID: ${ref_pod_field(metadata.podIP)} # podip，在使用宿主机网络的情况下，等于宿主机物理ip
             KAFKA_BROKER_ID: "1" # broker标识
             KAFKA_ZOOKEEPER_CONNECT: $zk_host # zk
             KAFKA_LISTENERS: PLAINTEXT://:9092
