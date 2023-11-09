@@ -226,7 +226,7 @@ class Boot(YamlBoot):
         self._app = name
         set_var('app', name)
         self._labels = {
-            'app': self._app
+            'app': name
         }
         # 执行子步骤
         self.run_steps(steps)
@@ -805,6 +805,9 @@ class Boot(YamlBoot):
         '''
         # anns['kubernetes.io/ingress.class'] = 'nginx' # annotation "kubernetes.io/ingress.class" is deprecated, please use 'spec.ingressClassName' instead
 
+        # 提前构建好service对端口映射，以便后面会根据端口拿service名
+        self.build_service_type2ports()
+
         # 如果参数是int/str，则表示是默认后端
         if isinstance(url2port, (int, str)):
             # 分割出转发的后端服务名+服务端口
@@ -902,7 +905,7 @@ class Boot(YamlBoot):
         }
         self.save_yaml(yaml, 'ingress')
 
-    # 分割出转发的后端服务名+服务端口
+    # 分割出转发的后端服务名+服务端口: ingress用到
     def split_backend_service_and_port(self, app_and_service_port):
         # 获得转发的应用名
         if isinstance(app_and_service_port, str) and ':' in app_and_service_port:  # 有应用名+端口
@@ -989,9 +992,6 @@ class Boot(YamlBoot):
                 yaml["spec"]["clusterIP"] = 'None' # 输出为 clusterIP: None, k8s认
             yamls.append(yaml)
 
-        # 记录当前app的端口对服务名映射
-        self.record_port2service(type2ports)
-
         self.save_yaml(yamls, 'svc')
 
     # 服务类型对服务名后缀的映射
@@ -1021,7 +1021,7 @@ class Boot(YamlBoot):
                 port2service[port['port']] = service # 端口->服务名
         self.app2port2service[self._app] = port2service
 
-    # 通过服务端口来获得服务名
+    # 通过服务端口来获得服务名: ingress用到
     def get_service_name_by_port(self, service_port, app):
         return self.app2port2service[app][service_port]
 
@@ -1029,6 +1029,7 @@ class Boot(YamlBoot):
         '''
         构建service需要的端口
         '''
+        # 获得当前app的所有端口映射
         port_maps = []
         for port in self.app_ports():
             port_map = self.build_service_port(port)
@@ -1044,6 +1045,9 @@ class Boot(YamlBoot):
         ret = groupby(port_maps, key=select_type)
         ret = {k: list(v) for k, v in ret} # 一次性迭代器转dict
         self._service_type2ports = ret
+
+        # 记录当前app的端口对服务名映射
+        self.record_port2service(ret)
         return ret
 
     def build_service_port(self, port):
@@ -1726,9 +1730,13 @@ class Boot(YamlBoot):
         在给环境变量赋值时，注入配置信息
         :param key
         '''
+        if '.' in key:
+            name, key = key.split('.')
+        else:
+            name = self._app
         return {
             "configMapKeyRef":{
-              "name": self._app, # The ConfigMap this value comes from.
+              "name": name, # The ConfigMap this value comes from.
               "key": key # The key to fetch.
             }
         }
@@ -1738,9 +1746,13 @@ class Boot(YamlBoot):
         在给环境变量赋值时，注入secret信息
         :param key
         '''
+        if '.' in key:
+            name, key = key.split('.')
+        else:
+            name = self._app
         return {
             "secretKeyRef":{
-              "name": self._app, # The Secret this value comes from.
+              "name": name, # The Secret this value comes from.
               "key": key # The key to fetch.
             }
         }
