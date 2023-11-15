@@ -64,6 +64,7 @@ class Boot(YamlBoot):
             'initContainers': self.initContainers,
             'containers': self.containers,
             'cname': self.cname,
+            'pvc': self.pvc,
         }
         self.add_actions(actions)
         # 自定义函数
@@ -958,6 +959,32 @@ class Boot(YamlBoot):
             yamls.append(yaml)
         self.save_yaml(yamls, 'cname')
 
+    @replace_var_on_params
+    def pvc(self, option):
+        '''
+        生成pvc
+        :params option 部署选项 {storageClassName, accessModes, size}
+                        storageClassName 存储类型，可省(用集群的默认存储类)
+                        accessModes 访问模式，可省默认为 - ReadWriteOnce
+                        size 存储大小，必须
+                        ...
+        '''
+        yaml = {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": self.build_metadata(),
+            "spec": {
+                "accessModes": get_and_del_dict_item(option, "accessModes", ["ReadWriteOnce"]),
+                "resources": {
+                    "requests": {
+                        "storage": get_and_del_dict_item(option, "size")
+                    }
+                },
+                **option
+            }
+        }
+        self.save_yaml(yaml, 'pvc')
+
     def service(self):
         '''
         根据 containers 中的映射路径来生成service
@@ -1457,7 +1484,7 @@ class Boot(YamlBoot):
         if protocol == 'pvc':
             return {
                 "persistentVolumeClaim": {
-                    "claimName": host_path
+                    "claimName": host or host_path or self._app
                 }
             }
         raise Exception(f'暂不支持卷协议: {protocol}')
@@ -1518,7 +1545,10 @@ class Boot(YamlBoot):
                     config://xxx/default.conf:/etc/nginx/conf.d/default.conf -- 将其他应用xxx的configmap的配置项挂载为文件
                     downwardAPI://:/etc/podinfo -- 将元数据labels和annotations以文件的形式挂载到目录
                     downwardAPI://labels:/etc/podinfo/labels.properties -- 将元数据labels挂载为文件
-                    pvc://pvc1:/usr/share/nginx/html -- 将pvc挂载为目录
+                    pvc://:/usr/share/nginx/html -- 将当前应用的pvc挂载为目录
+                    pvc://pvc1:/usr/share/nginx/html -- 将pvc1挂载为目录
+                    pvc://pvc1/subpath:/usr/share/nginx/html -- 将pvc1的子目录subpath挂载为目录
+                    pvc:///subpath:/usr/share/nginx/html -- 将当前应用的pvc的子目录subpath挂载为目录
                     其中生成的卷名为 vol-md5(最后一个:之前的部分)
         '''
         if mounts is None or len(mounts) == 0:
@@ -1577,6 +1607,9 @@ class Boot(YamlBoot):
             # host_path为key，mountPath为挂载的容器文件路径
             if (protocol == 'config' or protocol == 'secret' or protocol == 'downwardAPI') and host_path:
                 yaml['subPath'] = host_path
+            # pvc有host=pvc名, 而host_path=子路径, 两者用/分割
+            if protocol == 'pvc' and host:
+                yaml['subPath'] = host_path[1:] #干掉开头的/
             # 只读
             if ro:
                 yaml['readOnly'] = True

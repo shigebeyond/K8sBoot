@@ -1,0 +1,13 @@
+- app(pvctest):
+    - pvc: # 创建pvc
+        size: 100Mi
+    - containers:
+        test: # 容器
+          image: busybox
+          command: 'for i in 9 8 7 6 5 4 3 2 1; do echo \$i;sleep 2;done'
+          volumes: # 卷映射
+            - pvc://:/mnt/pvctest # 将当前应用的pvc挂载为目录
+            - pvc://pvc1:/mnt/pvc1 # 将pvc1挂载为目录
+            - pvc://pvc1/subpath:/mnt/pvc1/subpath # 将pvc1的子目录subpath挂载为目录
+            - pvc:///subpath:/mnt/pvctest/subpath # 将当前应用的pvc的子目录subpath挂载为目录
+    - deploy: 1
