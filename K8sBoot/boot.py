@@ -1159,6 +1159,7 @@ class Boot(YamlBoot):
             "env": env,
             "envFrom": self.build_env_from(get_and_del_dict_item(option, 'env_from')),
             "command": self.fix_command(get_and_del_dict_item(option, 'command')),
+            "args": self.fix_command_args(get_and_del_dict_item(option, "args")),
             "lifecycle": self.build_lifecycle(get_and_del_dict_item(option, 'postStart'), get_and_del_dict_item(option, 'preStop')),
             "ports": self.build_container_ports(get_and_del_dict_item(option, 'ports')),
             "resources": self.build_resources(get_and_del_dict_item(option, "resources")),
@@ -1167,7 +1168,7 @@ class Boot(YamlBoot):
             "readinessProbe": self.build_probe(get_and_del_dict_item(option, "ready?")),
         }
         user = get_and_del_dict_item(option, 'user')
-        if user is not None and "securityContext" not in ret:
+        if user is not None and "securityContext" not in option:
             ret["securityContext"] = {
                 "runAsUser": user
             }
@@ -1732,6 +1733,11 @@ class Boot(YamlBoot):
             # return re.split('\s+', cmd)  # 空格分割
             return ["/bin/sh", "-c", cmd] # sh修饰，不用bash(busybox里没有bash)
         return cmd
+
+    def fix_command_args(self, args):
+        if isinstance(args, str):
+            return [args]
+        return args
 
     def ref_pod_field(self, field):
         '''
