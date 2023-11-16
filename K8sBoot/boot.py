@@ -157,7 +157,11 @@ class Boot(YamlBoot):
         '''
         打印 kubectl apply 命令
         '''
-        cmd = f'App[{self._app}]的资源定义文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl apply --record=true -f {self.output_dir}'
+        if self._is_name_gen:
+            action = 'create'
+        else:
+            action = 'apply'
+        cmd = f'App[{self._app}]的资源定义文件已生成完毕, 如要更新到集群中的资源请手动执行: kubectl {action} --record=true -f {self.output_dir}'
         log.info(cmd)
 
     # --------- 动作处理的函数 --------
@@ -572,12 +576,7 @@ class Boot(YamlBoot):
                         ...其他参数参考 job()
         '''
         spec = {
-            "schedule": option["schedule"],
-            "startingDeadlineSeconds": option.get("startingDeadlineSeconds", 300),
-            "concurrencyPolicy": option.get("concurrencyPolicy", "Allow"),
-            "suspend": option.get("suspend", False),
-            "successfulJobsHistoryLimit": option.get("successfulJobsHistoryLimit", 3),
-            "failedJobsHistoryLimit": option.get("failedJobsHistoryLimit", 1),
+            **self.build_cron(option), # 构建定时选项
             "jobTemplate": {
                 "spec": self.build_job(option, True)
             }
@@ -590,6 +589,29 @@ class Boot(YamlBoot):
             "spec": spec
         }
         self.save_yaml(yaml, 'cronjob')
+
+    def build_cron(self, option):
+        '''
+        构建定时选项
+        :params option 部署选项 {successfulJobsHistoryLimit, failedJobsHistoryLimit, startingDeadlineSeconds, nodeSelector}
+                        schedule cron表达式，格式为 Minutes Hours DayofMonth Month DayofWeek Year，即分 小时 日 月 周，其中?与*都是表示给定字段是任意值
+                        startingDeadlineSeconds 过了调度时间n秒后没有启动成功，就不再启动
+                        concurrencyPolicy 并发策略： Allow 允许job并发执行，Forbid只允许当前这个执行，Replace取消当前这个，而执行新的
+                        suspend: 是否挂起，如果设置为true，后续所有执行被挂起，默认false
+                        successfulJobsHistoryLimit 保留几个成功的历史记录，默认3
+                        failedJobsHistoryLimit 保留几个失败的历史记录，默认1
+                        ttlSecondsAfterFinished 任务完成后的n秒后自动删除pod，有该选项，则successfulJobsHistoryLimit和failedJobsHistoryLimit会失效，反正不管成功或失败，到点照样删
+                        nodeSelector 节点选择，如 "kubernetes.io/os": "linux" 或 "disk": "ssd"
+                        ...其他参数参考 job()
+        '''
+        return {
+            "schedule": option["schedule"],
+            "startingDeadlineSeconds": option.get("startingDeadlineSeconds", 300),
+            "concurrencyPolicy": option.get("concurrencyPolicy", "Allow"),
+            "suspend": option.get("suspend", False),
+            "successfulJobsHistoryLimit": option.get("successfulJobsHistoryLimit", 3),
+            "failedJobsHistoryLimit": option.get("failedJobsHistoryLimit", 1),
+        }
 
     @replace_var_on_params
     def hpa(self, option):
@@ -1184,13 +1206,9 @@ class Boot(YamlBoot):
 
     def build_metadata(self, postfix='', anns=None):
         if self._is_name_gen and not postfix:
-            meta = {
-                "generateName": self._app + '-',
-            }
+            meta = { "generateName": self._app + '-' } # 自动生成名字
         else:
-            meta = {
-                "name": self._app + postfix,
-            }
+            meta = { "name": self._app + postfix }
         meta["labels"] = self.build_labels()
         if self._ns:
             meta['namespace'] = self._ns
@@ -1894,7 +1912,7 @@ class Boot(YamlBoot):
     # 创建k8s资源文件: 使用create api
     def create(self):
         self.prepare_k8s_apis()
-        for type, yml in self.yield_output_yaml():
+        for type, yml in self.yield_output_yamls():
             func = self.create_apis[type] # 获得创建方法
             if type == 'ns' or type == 'pv':
                 func(body=yml)
@@ -1904,7 +1922,7 @@ class Boot(YamlBoot):
     # 应用k8s资源文件: 使用 patch api
     def apply(self):
         self.prepare_k8s_apis()
-        for type, yml in self.yield_output_yaml():
+        for type, yml in self.yield_output_yamls():
             func = self.patch_apis[type] # 获得创建方法
             if type == 'ns' or type == 'pv':
                 func(body=yml)
@@ -1914,7 +1932,7 @@ class Boot(YamlBoot):
     # 删除k8s资源: 使用delete api
     def delete(self):
         self.prepare_k8s_apis()
-        for type, yml in self.yield_output_yaml():
+        for type, yml in self.yield_output_yamls():
             name = yml['metadata']['name']
             func = self.delete_apis[type] # 获得删除方法
             if type == 'ns' or type == 'pv':
@@ -1923,7 +1941,7 @@ class Boot(YamlBoot):
                 func(namespace=self._ns, name=name)
 
     # 遍历输出的yaml
-    def yield_output_yaml(self):
+    def yield_output_yamls(self):
         files = os.listdir(self.output_dir)
         for file in files:
             if file.endswith('.yml'):
