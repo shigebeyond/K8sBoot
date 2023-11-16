@@ -1,0 +1,7 @@
+- app(go):
+    - containers:
+        go:
+          image: golang:1.8
+          command: sleep 10000
+    # 部署
+    - deploy: 1

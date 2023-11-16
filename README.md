@@ -95,6 +95,8 @@ ns: 命名空间名
 
 2. app：生成应用，并执行子步骤
 ```yaml
+# 如果应用名以@开头, 表示应用名也作为pod的主机名
+# 如果应用名以-结尾，表示应用名作为资源名前缀，在创建资源时自动生成资源名
 app(应用名):
     # 子步骤
     - config:
@@ -514,6 +516,14 @@ ingress: nginx:80 # 直接int或str
 - app(gateway-blue):
     - ingress_by_weight(50):
         canary.com: demo
+```
+
+33. pvc: 生成pvc资源
+```
+- pvc: # 创建pvc
+    size: 100Mi # 存储大小
+    #storageClassName: xxx # 存储类型，可省(用集群的默认存储类)
+    #accessModes: ['ReadWriteOnce'] # 访问模式，可省默认为['ReadWriteOnce']
 ```
 
 ## 9 demo

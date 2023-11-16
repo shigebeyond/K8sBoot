@@ -83,6 +83,7 @@ class Boot(YamlBoot):
         # app作用域的属性，跳出app时就清空
         self._app = '' # 应用名
         self._app_as_hostname = False# 应用名作为pod的主机名
+        self._is_name_gen = False# 自是否动生成资源名
         self._labels = {}  # 记录标签
         self._config_data = {} # 记录设置过的配置
         self._config_file_keys = [] # 记录文件类型的key
@@ -101,6 +102,7 @@ class Boot(YamlBoot):
         self._app = None  # 应用名
         set_var('app', None)
         self._app_as_hostname = False # 应用名作为pod的主机名
+        self._is_name_gen = False # 是否自动生成资源名
         self._labels = {}  # 记录标签
         self._config_data = {}  # 记录设置过的配置
         self._config_file_keys = [] # 记录文件类型的key
@@ -222,6 +224,10 @@ class Boot(YamlBoot):
         if name.startswith('@'):
             self._app_as_hostname = True
             name = name[1:]
+        # 如果应用名以-结尾，表示应用名作为资源名前缀，在创建资源时自动生成资源名
+        if name.endswith('-'):
+            name = name[:-1]
+            self._is_name_gen = True
         # app名可带参数
         name = replace_var(name)
         self._app = name
@@ -1177,10 +1183,15 @@ class Boot(YamlBoot):
         return ret
 
     def build_metadata(self, postfix='', anns=None):
-        meta = {
-            "name": self._app + postfix,
-            "labels": self.build_labels()
-        }
+        if self._is_name_gen and not postfix:
+            meta = {
+                "generateName": self._app + '-',
+            }
+        else:
+            meta = {
+                "name": self._app + postfix,
+            }
+        meta["labels"] = self.build_labels()
         if self._ns:
             meta['namespace'] = self._ns
         if anns:
@@ -1880,8 +1891,8 @@ class Boot(YamlBoot):
         return ret
 
     # --------- 应用k8s资源文件 --------
-    # 应用k8s资源文件
-    def apply(self):
+    # 创建k8s资源文件: 使用create api
+    def create(self):
         self.prepare_k8s_apis()
         for type, yml in self.yield_output_yaml():
             func = self.create_apis[type] # 获得创建方法
@@ -1890,7 +1901,17 @@ class Boot(YamlBoot):
             else:
                 func(namespace=self._ns, body=yml)
 
-    # 删除k8s资源
+    # 应用k8s资源文件: 使用 patch api
+    def apply(self):
+        self.prepare_k8s_apis()
+        for type, yml in self.yield_output_yaml():
+            func = self.patch_apis[type] # 获得创建方法
+            if type == 'ns' or type == 'pv':
+                func(body=yml)
+            else:
+                func(namespace=self._ns, body=yml)
+
+    # 删除k8s资源: 使用delete api
     def delete(self):
         self.prepare_k8s_apis()
         for type, yml in self.yield_output_yaml():
@@ -1953,6 +1974,36 @@ class Boot(YamlBoot):
             'job': batch_api.create_namespaced_job,
             'cron_job': batch_api.create_namespaced_cron_job,
         }
+        self.patch_apis = {
+            'ns': core_api.patch_namespace,
+            'pv': core_api.patch_persistent_volume,
+
+            'config': core_api.patch_namespaced_config_map,
+            # 'bind': core_api.patch_namespaced_binding,
+            # 'endpoint': core_api.patch_namespaced_endpoints,
+            # 'event': core_api.patch_namespaced_event,
+            # 'limit_range': core_api.patch_namespaced_limit_range,
+            'pvc': core_api.patch_namespaced_persistent_volume_claim,
+            'pod': core_api.patch_namespaced_pod,
+            # 'pod_bind': core_api.patch_namespaced_pod_binding,
+            # 'pod_evict': core_api.patch_namespaced_pod_eviction,
+            # 'pod_template': core_api.patch_namespaced_pod_template,
+            'rc': core_api.patch_namespaced_replication_controller,
+            # 'resource_quota': core_api.patch_namespaced_resource_quota,
+            'secret': core_api.patch_namespaced_secret,
+            'svc': core_api.patch_namespaced_service,
+            # 'service_account': core_api.patch_namespaced_service_account,
+            # 'service_account_token': core_api.patch_namespaced_service_account_token,
+
+            # 'cr': app_api.patch_namespaced_controller_revision,
+            'ds': app_api.patch_namespaced_daemon_set,
+            'deploy': app_api.patch_namespaced_deployment,
+            'rs': app_api.patch_namespaced_replica_set,
+            'sts': app_api.patch_namespaced_stateful_set,
+
+            'job': batch_api.patch_namespaced_job,
+            'cron_job': batch_api.patch_namespaced_cron_job,
+        }
         self.delete_apis = {
             'ns': core_api.delete_namespace,
             'pv': core_api.delete_persistent_volume,
@@ -1983,7 +2034,6 @@ class Boot(YamlBoot):
             'job': batch_api.delete_namespaced_job,
             'cron_job': batch_api.delete_namespaced_cron_job,
         }
-
 
 # cli入口
 def main():
