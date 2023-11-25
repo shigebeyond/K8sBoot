@@ -24,12 +24,15 @@ k8s太复杂了，特别是资源定义文件，学习与使用成本很高，�
 [k8scmd](https://github.com/shigebeyond/k8scmd)：对k8s的复杂命令做了大量简化
 
 ## 4 同类yaml驱动框架
-[HttpBoot](https://github.com/shigebeyond/HttpBoot)
-[SeleniumBoot](https://github.com/shigebeyond/SeleniumBoot)
-[AppiumBoot](https://github.com/shigebeyond/AppiumBoot)
-[MiniumBoot](https://github.com/shigebeyond/MiniumBoot)
-[ExcelBoot](https://github.com/shigebeyond/ExcelBoot)
-[MonitorBoot](https://github.com/shigebeyond/MonitorBoot)
+* [HttpBoot](https://github.com/shigebeyond/HttpBoot) yaml驱动http接口自动化测试+性能测试
+* [SeleniumBoot](https://github.com/shigebeyond/SeleniumBoot) yaml驱动Selenium测试
+* [AppiumBoot](https://github.com/shigebeyond/AppiumBoot) yaml驱动Appium测试
+* [MiniumBoot](https://github.com/shigebeyond/MiniumBoot) yaml驱动Minium测试
+* [ExcelBoot](https://github.com/shigebeyond/ExcelBoot) yaml驱动Excel生成
+* [MonitorBoot](https://github.com/shigebeyond/MonitorBoot) yaml驱动linux系统监控与jvm性能监控与告警
+* [SparkBoot](https://github.com/shigebeyond/SparkBoot) yaml驱动Spark开发
+* [K8sBoot](https://github.com/shigebeyond/K8sBoot) 简化k8s资源定义文件
+* [ArgoFlowBoot](https://github.com/shigebeyond/ArgoFlowBoot) 简化Argo Workflows工作流定义文件
 
 ## 5 todo
 1. 支持更多的动作
@@ -702,6 +705,8 @@ spec:
 4. 应用k8s资源文件
 ```sh
 kubectl apply --record=true -f data/
+# 或
+k8sapply data/
 ```
 
 5. 查看pod
