@@ -67,14 +67,9 @@ class Boot(YamlBoot):
             'pvc': self.pvc,
         }
         self.add_actions(actions)
+
         # 自定义函数
-        funcs = {
-            'ref_pod_field': self.ref_pod_field,
-            'ref_resource_field': self.ref_resource_field,
-            'ref_config': self.ref_config,
-            'ref_secret': self.ref_secret,
-        }
-        custom_funs.update(funcs)
+        self.register_custom_funs()
 
         self._ns = '' # 命名空间
         self.app2ports = {} # 记录每个app的容器端口映射，不会清空
@@ -97,7 +92,7 @@ class Boot(YamlBoot):
         self._cname_ports = {} # 记录cname(externalName Service)的端口
         self._is_sts = False # 是否用 statefulset 来部署
 
-        # 清空app相关的属性
+    # 清空app相关的属性
     def clear_app(self):
         self._app = None  # 应用名
         set_var('app', None)
@@ -115,6 +110,17 @@ class Boot(YamlBoot):
         self._service_type2ports = {}  # 记service类型对端口映射
         self._cname_ports = {}  # 记录cname(externalName Service)的端口
         self._is_sts = False  # 是否用 statefulset 来部署
+
+
+    # 自定义函数
+    def register_custom_funs(self):
+        funcs = {
+            'ref_pod_field': self.ref_pod_field,
+            'ref_resource_field': self.ref_resource_field,
+            'ref_config': self.ref_config,
+            'ref_secret': self.ref_secret,
+        }
+        custom_funs.update(funcs)
 
     # 获得指定app的端口映射
     def app_ports(self, app = None):
