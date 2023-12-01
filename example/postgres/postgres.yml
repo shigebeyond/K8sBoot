@@ -15,4 +15,4 @@
             - /root/k8s/pgsql/data:/var/lib/postgresql/data:rw
     # 部署
     - deploy:
-        replicas: 2 # 副本数
+        replicas: 1 # 副本数

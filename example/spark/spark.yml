@@ -4,8 +4,8 @@
 #    master_host: hww-pc
 #    master_ip: 192.168.1.9
 #    home: /home/hww
-    master_host: mac
-    master_ip: 192.168.61.14
+    master_host: shi-pc
+    master_ip: 192.168.61.18
     home: /home/shi
     deploy_master:
       replicas: 1 # 副本数
@@ -35,14 +35,11 @@
 #            - '7077:7077:7077' # 用于连接spark
 #            - '4040:4040:4040' # job执行UI
           ports: '*' # 映射宿主机所有端口，即hostNetwork=true
-          command: /opt/bitnami/spark/start.sh
+          command: /mnt/start.sh
           volumes:
-            - /data/spark/python:/python # 映射/python目录，用于存放pyspark代码，方便运行
-            - /data/spark/input:/input
-            - /data/spark/output:/output
+            - nfs://$master_ip/spark:/mnt # 挂载nfs，包含start.sh+jar+脚本
             - /opt/hadoop-3.2.1:/opt/hadoop-3.2.1 # 映射hadoop目录
             - $home/.local/lib/python3.8/site-packages:/.local/lib/python3.8/site-packages # 映射python依赖目录
-            - /data/spark/start.sh:/opt/bitnami/spark/start.sh # 复制jar(如mysql驱动)+启动spark
     # 部署
     - deploy: $deploy_master
 # 从
@@ -69,12 +66,10 @@
           ports:
             - '8081:8081' # spark UI
             - '8082:8082' # 若8081被占用，则会递增
-          command: /opt/bitnami/spark/start.sh
+          command: /mnt/start.sh
           volumes:
-            - /data/spark/input:/input
-            - /data/spark/output:/output
+            - nfs://$master_ip/spark:/mnt # 挂载nfs，包含start.sh+jar+脚本
             - /data/spark/work:/opt/bitnami/spark/work # executor工作目录，有日志
-            - /data/spark/start.sh:/opt/bitnami/spark/start.sh # 启动脚本(要先授予可执行权限):复制jar(如mysql驱动)+启动spark
     # deamonset
     - ds:
         hostname:

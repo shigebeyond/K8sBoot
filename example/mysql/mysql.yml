@@ -1,4 +1,5 @@
 # https://blog.csdn.net/nuptaxin/article/details/123306013
+# 准备数据目录的权限：先以user=0(root)启动，然后执行 chown -R mysql:mysql /var/lib/mysql/
 # 连接: mysql -h$mac -P30056 -uroot -proot
 - app(mysql):
     - containers:
@@ -11,7 +12,7 @@
           ports: # 端口映射
             - 30056:3306:3306 # 宿主机端口:服务端口:容器端口
           volumes: # 卷映射
-            #- /home/shi/data/mysql:/var/lib/mysql/ # 个人电脑
+#            - /home/shi/data/mysql:/var/lib/mysql/ # 个人电脑
             - /data/mysql56:/var/lib/mysql/
           command: mysqld --server-id=1 --log-bin=mysql-bin --binlog-format=row --expire-logs-days=3 --log_slave_updates=1 --port=3306
     # 部署

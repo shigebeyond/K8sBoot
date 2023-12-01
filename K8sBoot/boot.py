@@ -1611,7 +1611,8 @@ class Boot(YamlBoot):
                 protocol = mat.group(1) # 协议
                 host_and_path = mat.group(2) # 主机 + 宿主机路径
                 mount_path = mat.group(3) # 容器中挂载路径
-                mat = re.search('([\w\d\._:]+)(/.+)', host_and_path)
+                #mat = re.search('([\w\d\._:]+)(/.+)', host_and_path)
+                mat = re.search('([^/]+)(/.*)', host_and_path)
                 if mat:
                     host = mat.group(1) # 主机
                     host_path = mat.group(2) # 宿主机路径

@@ -1,0 +1,26 @@
+# https://blog.csdn.net/lihongbao80/article/details/120322330
+- app(nfs-server):
+    - containers:
+        nfs-server:
+          image: itsthenetwork/nfs-server-alpine
+          env:
+            SHARED_DIRECTORY: /share # 该变量会在 /etc/exports 中开放变量值对应的目录 为共享目录
+          ports:
+            - 2049:2049:2049
+          volumes:
+            - /data/nfs:/share
+          securityContext:
+            privileged: true
+    # 部署
+    - deploy:
+        replicas: 1 # 副本数
+        nodeSelector: # 节点选择: dict形式
+          kubernetes.io/hostname: shi-pc
+- app(nfs-client):
+    - containers:
+        nfs-client:
+          volumes:
+            - nfs://192.168.61.18/:/mnt/nfs # 挂载nfs，其中 192.168.61.18/ 为server ip+共享目录的子路径
+          command: ls /mnt/nfs
+    # 部署
+    - deploy: 1
