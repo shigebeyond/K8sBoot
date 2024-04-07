@@ -248,7 +248,7 @@ secret:
 
 17. secret_from_files：以文件内容的方式来设置 Secret 资源，在挂载secret时items默认填充用secret_from_files()写入的key
 ```yaml
-config_from_files: # secret文件
+secret_from_files: # secret文件
     - ./admin.conf
 ```
 
