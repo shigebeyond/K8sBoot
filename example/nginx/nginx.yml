@@ -10,7 +10,7 @@
 #    - config_from_files: # 文件dict，key是配置名，value是文件路径
 #        default.conf: ./default.conf
 
-#    - secret_files: ./default.conf # 与 config_from_files 调用一样
+#    - secret_from_files: ./default.conf # 与 config_from_files 调用一样
 
     - containers:
         nginx: # 定义多个容器, dict形式, 键是容器名, 值是容器配置

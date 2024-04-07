@@ -47,7 +47,7 @@ class Boot(YamlBoot):
             'config': self.config,
             'config_from_files': self.config_from_files,
             'secret': self.secret,
-            'secret_files': self.secret_files,
+            'secret_from_files': self.secret_from_files,
             'pod': self.pod,
             'rc': self.rc,
             'rs': self.rs,
@@ -311,7 +311,7 @@ class Boot(YamlBoot):
         if isinstance(files, str):
             path = files
             if not os.path.exists(path):
-                raise Exception(f"config_from_files/secret_files动作参数[{path}]因是str类型而被认定为目录或文件，但目录或文件不存在")
+                raise Exception(f"config_from_files/secret_from_files动作参数[{path}]因是str类型而被认定为目录或文件，但目录或文件不存在")
             if os.path.isdir(path): # 目录
                 files = [os.path.join(path, f) for f in os.listdir(path)]
             else: # 文件
@@ -326,7 +326,7 @@ class Boot(YamlBoot):
             return ret
 
         # 4 其他: 报错
-        raise Exception(f"config_from_files/secret_files动作参数只接受dict/list/str类型，而实际参数是: {files}")
+        raise Exception(f"config_from_files/secret_from_files动作参数只接受dict/list/str类型，而实际参数是: {files}")
 
     # 生成配置
     def configmap(self):
@@ -353,9 +353,9 @@ class Boot(YamlBoot):
         self._secret_data.update(data)
 
     @replace_var_on_params
-    def secret_files(self, files):
+    def secret_from_files(self, files):
         '''
-        以文件内容的方式来设置secret，在挂载secret时items默认填充用secret_files()写入的key
+        以文件内容的方式来设置secret，在挂载secret时items默认填充用secret_from_files()写入的key
         :param files secret文件list或dict或目录
                   dict类型： key是配置项名，value是文件路径，如 default.conf: ./default.conf
                   list类型： 元素是文件路径，会用文件名作为key
